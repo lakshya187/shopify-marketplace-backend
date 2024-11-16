@@ -7,6 +7,7 @@ import QueryString from "querystring";
 import PasswordGenerator from "generate-password";
 import { EncryptJWT, DecryptJWT } from "#utils/auth.js";
 import AddInitialWebhooks from "#utils/shopify/add-initial-webhooks.js";
+// import publish from "../../common-functions/redis/publish.js";
 
 export async function RedirectToShopifyAuth(req) {
   const { shop } = req.query;
@@ -123,7 +124,38 @@ export async function ShopifyAuthCallback(req) {
       shopJson.shop,
       access_token,
     );
+    const syncMessage = {
+      shopName: shopJson.shop.name,
+      accessToken: access_token,
+    };
 
+    // publish(
+    //   "ProductSync",
+    //   syncMessage,
+    //   (err, status) => {
+    //     if (err) {
+    //       logger(
+    //         "error",
+    //         `Failed to publish ProductSync message: ${err.message}`,
+    //       );
+    //     } else {
+    //       logger(
+    //         "info",
+    //         `ProductSync message published successfully: ${status}`,
+    //       );
+    //     }
+    //   },
+    //   (err, result) => {
+    //     if (err) {
+    //       logger("error", `ProductSync job failed: ${err.message}`);
+    //     } else {
+    //       logger(
+    //         "info",
+    //         `ProductSync job succeeded: ${JSON.stringify(result)}`,
+    //       );
+    //     }
+    //   },
+    // );
     // redirect to frontend with the token which will allow them to be logged in
 
     return {
@@ -314,7 +346,7 @@ async function GetStoreAuthToken(storeData, accessToken) {
 
   logger("info", "Adding store's default webhooks");
 
-  await AddInitialWebhooks(storeData.myshopify_domain, accessToken);
+  // await AddInitialWebhooks(storeData.myshopify_domain, accessToken);
 
   logger("info", "Added store's default webhooks");
 

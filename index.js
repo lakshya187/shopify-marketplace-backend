@@ -5,6 +5,8 @@ import AWSXRay from "aws-xray-sdk";
 import logger from "./common-functions/logger/index.js";
 import RequestTracker from "./middlewares/request-tracker.js";
 import MountAPI from "./routes/index.js";
+import StartSubscribers from "./subscribers/index.js";
+import StartJobs from "./jobs/index.js";
 
 const application = express();
 const PORT = process.env.APPLICATION_PORT || 8080;
@@ -46,5 +48,6 @@ if (process.env.NODE_ENV === "production") {
 }
 
 application.listen(PORT, () => {
+  StartJobs();
   logger("info", `Application is running on port ${PORT}`);
 });
