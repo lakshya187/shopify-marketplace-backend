@@ -70,17 +70,17 @@ const GetStoreOrders = async ({
     const orders = result.data.orders.edges.map((order) => {
       return {
         orderId: order.node.id,
-        totalPrice: order.node.totalPriceSet.presentmentMoney.amount, // Total price in the default currency
-        currencyCode: order.node.totalPriceSet.presentmentMoney.currencyCode, // Currency of the total price
+        totalPrice: order.node.totalPriceSet.presentmentMoney.amount,
+        currencyCode: order.node.totalPriceSet.presentmentMoney.currencyCode,
         lineItems: order.node.lineItems.edges.map((item) => ({
           title: item.node.title,
           quantity: item.node.quantity,
-          unitPrice: item.node.originalUnitPriceSet.presentmentMoney.amount, // Unit price in the default currency
+          unitPrice: item.node.originalUnitPriceSet.presentmentMoney.amount,
           currencyCode:
-            item.node.originalUnitPriceSet.presentmentMoney.currencyCode, // Currency of the unit price
+            item.node.originalUnitPriceSet.presentmentMoney.currencyCode,
           id: item.node.id,
         })),
-        numOfProducts: order.node.lineItems.edges.length, // Count of products in the order
+        numOfProducts: order.node.lineItems.edges.length,
       };
     });
     return {
