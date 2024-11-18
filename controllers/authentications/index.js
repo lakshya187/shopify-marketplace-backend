@@ -124,38 +124,6 @@ export async function ShopifyAuthCallback(req) {
       shopJson.shop,
       access_token,
     );
-    const syncMessage = {
-      shopName: shopJson.shop.name,
-      accessToken: access_token,
-    };
-
-    // publish(
-    //   "ProductSync",
-    //   syncMessage,
-    //   (err, status) => {
-    //     if (err) {
-    //       logger(
-    //         "error",
-    //         `Failed to publish ProductSync message: ${err.message}`,
-    //       );
-    //     } else {
-    //       logger(
-    //         "info",
-    //         `ProductSync message published successfully: ${status}`,
-    //       );
-    //     }
-    //   },
-    //   (err, result) => {
-    //     if (err) {
-    //       logger("error", `ProductSync job failed: ${err.message}`);
-    //     } else {
-    //       logger(
-    //         "info",
-    //         `ProductSync job succeeded: ${JSON.stringify(result)}`,
-    //       );
-    //     }
-    //   },
-    // );
     // redirect to frontend with the token which will allow them to be logged in
 
     return {
