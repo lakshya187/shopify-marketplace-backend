@@ -27,7 +27,6 @@ export default () => {
       );
     }
   });
-
   // appRouter.post(PRODUCT_CREATE, AuthMiddleware, async (req, res) => {
   //   try {
   //     const data = await CreateProductsStore(req);
