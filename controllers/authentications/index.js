@@ -1,7 +1,7 @@
 import Authentications from "#schemas/authentications.js";
 import Stores from "#schemas/stores.js";
 import Crypto from "crypto";
-import { BASIC_AUTH_SCOPE } from "#constants/shopify.js";
+import { BASIC_AUTH_SCOPE, INTERNAL_STORES } from "#constants/shopify.js";
 import logger from "#common-functions/logger/index.js";
 import QueryString from "querystring";
 import PasswordGenerator from "generate-password";
@@ -295,6 +295,7 @@ async function GetStoreAuthToken(storeData, accessToken) {
     countryCode: storeData.country_code,
     provinceCode: storeData.province_code,
     domain: storeData.domain,
+    isInternalStore: INTERNAL_STORES.includes(storeData.myshopify_domain),
   });
 
   const password = PasswordGenerator.generate({

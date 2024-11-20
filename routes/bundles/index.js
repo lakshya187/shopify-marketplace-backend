@@ -14,23 +14,24 @@ import {
   GetSingleBundle,
   DeleteSingleBundle,
 } from "../../controllers/bundles/index.js";
-import { validateCreateBundle } from "../../middlewares/validate/bundleValidators.js";
 import AuthMiddleware from "../../middlewares/authentication.js";
+import ValidateMiddleware from "../../validators/index.js";
+import { validateCreateBundle } from "#validators/bundles/index.js";
 const BundleRoutes = Router();
 
 export default () => {
   BundleRoutes.post(
     CREATE_BUNDLE,
     AuthMiddleware,
-    validateCreateBundle,
+    ValidateMiddleware(validateCreateBundle),
     async (req, res) => {
       try {
-        const savedBundle = await CreateBundle(req);
-        logger("info", `Bundle created successfully: ${savedBundle._id}`);
+        const data = await CreateBundle(req);
+        logger("info", `Bundle created successfully: ${data._id}`);
         return SuccessResponseHandler(req, res, {
-          status: savedBundle.status,
-          message: savedBundle.message,
-          data: savedBundle.data,
+          status: data.status,
+          message: data.message,
+          data: data.data,
         });
       } catch (error) {
         // Log and send an error response
