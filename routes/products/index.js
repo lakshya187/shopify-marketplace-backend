@@ -5,9 +5,9 @@ import SuccessResponseHandler from "#common-functions/utils/successResponseHandl
 import { PRODUCT_GET } from "#constants/routes/products/index.js";
 import { GetProducts } from "../../controllers/products/index.js";
 import AuthMiddleware from "../../middlewares/authentication.js";
-const AuthRoutes = Router();
+const ProductRoutes = Router();
 export default () => {
-  AuthRoutes.get(PRODUCT_GET, AuthMiddleware, async (req, res) => {
+  ProductRoutes.get(PRODUCT_GET, AuthMiddleware, async (req, res) => {
     try {
       const data = await GetProducts(req);
 
@@ -47,5 +47,5 @@ export default () => {
   //   }
   // });
 
-  return AuthRoutes;
+  return ProductRoutes;
 };

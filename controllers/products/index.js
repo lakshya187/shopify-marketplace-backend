@@ -20,6 +20,6 @@ export const GetProducts = async (req) => {
       message: "Store products fetched successfully",
     };
   } catch (e) {
-    return { status: 400, message: "Invalid token" };
+    return { status: 400, message: e };
   }
 };
