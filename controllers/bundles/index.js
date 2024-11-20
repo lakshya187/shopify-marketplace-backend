@@ -102,6 +102,27 @@ export const GetSingleBundle = async (req) => {
 export const DeleteSingleBundle = async (req) => {
   try {
     const { bundleId } = req.params;
+    const { user } = req;
+
+    const bundle = await Bundles.findById(bundleId).lean();
+    if (!bundle) {
+      return {
+        message: "No bundle found the provided id",
+        status: 400,
+      };
+    }
+
+    const [store] = await Stores.find({
+      storeUrl: user.storeUrl,
+    }).lean();
+
+    if (bundle.store !== store._id) {
+      return {
+        status: 401,
+        message: "You are not authorized to delete this bundled",
+      };
+    }
+
     await Bundles.findByIdAndDelete(bundleId);
     return {
       message: "Bundle deleted successfully",
