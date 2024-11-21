@@ -14,7 +14,7 @@ export default () => {
       return SuccessResponseHandler(req, res, {
         status: data.status || 200,
         message: data.message || "Success",
-        data,
+        data: data.data?.data || [],
       });
     } catch (error) {
       console.log(error);
@@ -27,25 +27,6 @@ export default () => {
       );
     }
   });
-  // appRouter.post(PRODUCT_CREATE, AuthMiddleware, async (req, res) => {
-  //   try {
-  //     const data = await CreateProductsStore(req);
-  //     return SuccessResponseHandler(req, res, {
-  //       status: data.status || 201,
-  //       message: data.message || "Success",
-  //       data,
-  //     });
-  //   } catch (e) {
-  //     console.error(e);
-  //     return ErrorResponseHandler(
-  //       req,
-  //       res,
-  //       error.status || 500,
-  //       error.message || "Internal server error",
-  //       error,
-  //     );
-  //   }
-  // });
 
   return ProductRoutes;
 };
