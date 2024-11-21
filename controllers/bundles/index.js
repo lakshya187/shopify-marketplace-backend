@@ -76,7 +76,7 @@ export const CreateBundle = async (req) => {
 
     const savedBundle = await bundle.save();
 
-    Promise.all(
+    await Promise.all(
       products.map(async (product) => {
         product.productId = product.id;
         product.bundle = bundle._id;
