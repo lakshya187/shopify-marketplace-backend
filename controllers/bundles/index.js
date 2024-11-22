@@ -1,10 +1,26 @@
+import GetSingleProduct from "#common-functions/shopify/getSingleProduct.service.js";
 import Bundles from "#schemas/bundles.js";
 import Stores from "#schemas/stores.js";
+import Products from "#schemas/products.js";
 
 export const CreateBundle = async (req) => {
   try {
-    const { name, description, product_ids, price, tags, discount, metadata } =
-      req.body;
+    const {
+      name,
+      description,
+      productIds,
+      price,
+      tags,
+      discount,
+      metadata,
+      costOfGoods,
+      isOnSale,
+      width,
+      length,
+      weight,
+      images,
+      coverImage,
+    } = req.body;
     const { user } = req;
 
     const [store] = await Stores.find({
@@ -17,18 +33,56 @@ export const CreateBundle = async (req) => {
         message: "Store not found",
       };
     }
+    // fetch all the products before saving the bundle
+    const products = await Promise.all(
+      productIds
+        .map(async (id) => {
+          const product = await GetSingleProduct({
+            accessToken: store.accessToken,
+            productId: id,
+            shopName: store.shopName,
+          });
+          if (product) {
+            return product;
+          }
+          return null;
+        })
+        .filter(Boolean),
+    );
+
+    if (productIds.length !== products.length) {
+      return {
+        message: "Not all the product ids provided are valid",
+        status: 400,
+      };
+    }
     const bundle = new Bundles({
       name,
       description,
-      product_ids,
       store: store._id,
       price,
       tags: tags || [],
       discount: discount || 0,
       metadata: metadata || {},
+      costOfGoods,
+      isOnSale,
+      width,
+      length,
+      weight,
+      images,
+      coverImage,
+      profit: Number(price) - Number(costOfGoods),
     });
 
     const savedBundle = await bundle.save();
+
+    await Promise.all(
+      products.map(async (product) => {
+        product.productId = product.id;
+        product.bundle = bundle._id;
+        await Products.create(product);
+      }),
+    );
     return {
       status: 201,
       message: "Successfully created the bundle",
@@ -102,6 +156,27 @@ export const GetSingleBundle = async (req) => {
 export const DeleteSingleBundle = async (req) => {
   try {
     const { bundleId } = req.params;
+    const { user } = req;
+
+    const bundle = await Bundles.findById(bundleId).lean();
+    if (!bundle) {
+      return {
+        message: "No bundle found the provided id",
+        status: 400,
+      };
+    }
+
+    const [store] = await Stores.find({
+      storeUrl: user.storeUrl,
+    }).lean();
+
+    if (bundle.store !== store._id) {
+      return {
+        status: 401,
+        message: "You are not authorized to delete this bundled",
+      };
+    }
+
     await Bundles.findByIdAndDelete(bundleId);
     return {
       message: "Bundle deleted successfully",
