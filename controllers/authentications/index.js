@@ -315,7 +315,7 @@ async function GetStoreAuthToken(storeData, accessToken) {
 
   logger("info", "Adding store's default webhooks");
 
-  // await AddInitialWebhooks(storeData.myshopify_domain, accessToken);
+  await AddInitialWebhooks(storeData.myshopify_domain, accessToken);
 
   logger("info", "Added store's default webhooks");
 

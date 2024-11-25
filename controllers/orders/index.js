@@ -1,0 +1,120 @@
+import GetSingleProduct from "#common-functions/shopify/getSingleProduct.service.js";
+import Bundles from "#schemas/bundles.js";
+import Stores from "#schemas/stores.js";
+import Products from "#schemas/products.js";
+import Orders from "#schemas/orders.js";
+
+export const GetOrders = async (req) => {
+  try {
+    const { user } = req;
+    const [store] = await Stores.find({
+      storeUrl: user.storeUrl,
+    });
+    if (!store) {
+      return {
+        status: 400,
+        message: "Store not found",
+      };
+    }
+    const { skip, limit } = req.query;
+
+    const bundles = await Orders.find({
+      store: store._id,
+    })
+      .skip(Number(skip) || 0)
+      .limit(Number(limit) || 10)
+      .sort({ createdAt: -1 });
+
+    return {
+      data: bundles,
+      message: "Successfully fetched the Bundles",
+      status: 200,
+    };
+  } catch (e) {
+    return {
+      message: e,
+      status: 500,
+    };
+  }
+};
+
+export const GetOrdersOverview = async (req) => {
+  try {
+    const { user } = req;
+    const [store] = await Stores.find({
+      storeUrl: user.storeUrl,
+    });
+    if (!store) {
+      return {
+        status: 400,
+        message: "Store not found",
+      };
+    }
+    const [data] = await Orders.aggregate([
+      {
+        $match: {
+          store: store._id, // Ensure you're matching the correct store
+        },
+      },
+      {
+        $lookup: {
+          from: "bundles",
+          localField: "bundle", // Match the actual field name (remove "$")
+          foreignField: "_id",
+          as: "bundleDetails",
+        },
+      },
+      {
+        $unwind: {
+          path: "$bundleDetails",
+          preserveNullAndEmptyArrays: true, // Handle cases where no bundleDetails exist
+        },
+      },
+      {
+        $group: {
+          _id: "$store", // Group by store
+          totalRevenue: { $sum: "$amount" },
+          totalCostOfGoods: { $sum: "$bundleDetails.costOfGoods" },
+          pending: {
+            $sum: { $cond: [{ $eq: ["$status", "pending"] }, 1, 0] },
+          },
+          delivered: {
+            $sum: { $cond: [{ $eq: ["$status", "delivered"] }, 1, 0] },
+          },
+          shipped: {
+            $sum: { $cond: [{ $eq: ["$status", "shipped"] }, 1, 0] },
+          },
+        },
+      },
+      {
+        $project: {
+          _id: 0,
+          salesSummary: {
+            total_revenue: { $round: ["$totalRevenue", 2] }, // Round total revenue to 2 decimals
+            net_revenue: {
+              $round: [
+                { $subtract: ["$totalRevenue", "$totalCostOfGoods"] },
+                2,
+              ],
+            }, // Round net revenue to 2 decimals
+          },
+          orderSummary: {
+            pending: "$pending",
+            delivered: "$delivered",
+            shipped: "$shipped",
+          },
+        },
+      },
+    ]);
+    return {
+      data,
+      status: 200,
+      message: "Overview fetched successfully",
+    };
+  } catch (e) {
+    return {
+      message: e,
+      status: 500,
+    };
+  }
+};
