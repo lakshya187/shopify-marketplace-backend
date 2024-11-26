@@ -16,13 +16,35 @@ import {
   GetSingleBundle,
   DeleteSingleBundle,
   GenerateUploadUrl,
+  GetOverview,
 } from "../../controllers/bundles/index.js";
 import AuthMiddleware from "../../middlewares/authentication.js";
 import ValidateMiddleware from "../../validators/index.js";
-import { validateCreateBundle } from "#validators/bundles/index.js";
+import {
+  validateCreateBundle,
+  validateGenerateUrl,
+} from "#validators/bundles/index.js";
 const BundleRoutes = Router();
 
 export default () => {
+  BundleRoutes.get(GET_OVERVIEW, AuthMiddleware, async (req, res) => {
+    try {
+      const data = await GetOverview(req);
+      return SuccessResponseHandler(req, res, {
+        status: data.status,
+        message: data.message,
+        data: data.data,
+      });
+    } catch (error) {
+      logger("error", "Error when generating upload url", error);
+      return ErrorResponseHandler(
+        req,
+        res,
+        error.message || "Internal server error",
+      );
+    }
+  });
+
   BundleRoutes.post(
     CREATE_BUNDLE,
     AuthMiddleware,
@@ -102,59 +124,28 @@ export default () => {
     }
   });
 
-  BundleRoutes.post(GENERATE_UPLOAD_URL, AuthMiddleware, async (req, res) => {
-    try {
-      const data = await GenerateUploadUrl(req);
-      return SuccessResponseHandler(req, res, {
-        status: data.status,
-        message: data.message,
-        data: data.data,
-      });
-    } catch (error) {
-      logger("error", "Error when generating upload url", error);
-      return ErrorResponseHandler(
-        req,
-        res,
-        error.message || "Internal server error",
-      );
-    }
-  });
-
-  BundleRoutes.get("/overview", async (req, res) => {
-    try {
-      // const data = await GenerateUploadUrl(req);
-      return SuccessResponseHandler(req, res, {
-        status: data.status,
-        message: data.message,
-        data: data.data,
-      });
-    } catch (error) {
-      logger("error", "Error when generating upload url", error);
-      return ErrorResponseHandler(
-        req,
-        res,
-        error.message || "Internal server error",
-      );
-    }
-  });
-
-  BundleRoutes.get(GET_OVERVIEW, async (req, res) => {
-    try {
-      const data = await GetOverview(req);
-      return SuccessResponseHandler(req, res, {
-        status: data.status,
-        message: data.message,
-        data: data.data,
-      });
-    } catch (error) {
-      logger("error", "Error when generating upload url", error);
-      return ErrorResponseHandler(
-        req,
-        res,
-        error.message || "Internal server error",
-      );
-    }
-  });
+  BundleRoutes.post(
+    GENERATE_UPLOAD_URL,
+    AuthMiddleware,
+    ValidateMiddleware(validateGenerateUrl),
+    async (req, res) => {
+      try {
+        const data = await GenerateUploadUrl(req);
+        return SuccessResponseHandler(req, res, {
+          status: data.status,
+          message: data.message,
+          data: data.data,
+        });
+      } catch (error) {
+        logger("error", "Error when generating upload url", error);
+        return ErrorResponseHandler(
+          req,
+          res,
+          error.message || "Internal server error",
+        );
+      }
+    },
+  );
 
   return BundleRoutes;
 };

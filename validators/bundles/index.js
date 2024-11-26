@@ -69,3 +69,9 @@ export const validateCreateBundle = Joi.object({
     "array.base": "Images must be a string of array",
   }),
 });
+
+export const validateGenerateUrl = Joi.object({
+  filename: Joi.string().required(),
+  mimeType: Joi.string().required(),
+  fileSize: Joi.string().required(),
+});

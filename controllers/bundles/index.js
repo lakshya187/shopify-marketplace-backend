@@ -210,7 +210,7 @@ export const GenerateUploadUrl = async (req) => {
     return {
       data: urls,
       status: 200,
-      message: "Successfully generated urls to upload images",
+      message: "Successfully generated image upload URLs",
     };
   } catch (e) {
     return {
@@ -232,15 +232,25 @@ export const GetOverview = async (req) => {
         $match: {
           store: store._id,
         },
+      },
+      {
         $group: {
-          _id: null, // We're not grouping by any field, so we use null to get a single result
-          totalBundles: { $sum: 1 }, // Count all bundles
-          totalPriceValue: { $sum: "$price" }, // Sum up the price of all bundles
-          totalActiveBundles: {
+          _id: null,
+          total_bundles: { $sum: 1 },
+          total_bundles_value: { $sum: "$price" },
+          total_active_bundles: {
             $sum: {
-              $cond: [{ $eq: ["$status", "active"] }, 1, 0], // Count bundles where status is "active"
+              $cond: [{ $eq: ["$status", "active"] }, 1, 0],
             },
           },
+        },
+      },
+      {
+        $project: {
+          _id: 0,
+          total_bundles: 1,
+          total_bundles_value: { $round: ["$total_bundles_value", 2] },
+          total_active_bundles: 1,
         },
       },
     ]);

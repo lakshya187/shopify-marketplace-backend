@@ -1,7 +1,4 @@
-import GetSingleProduct from "#common-functions/shopify/getSingleProduct.service.js";
-import Bundles from "#schemas/bundles.js";
 import Stores from "#schemas/stores.js";
-import Products from "#schemas/products.js";
 import Orders from "#schemas/orders.js";
 
 export const GetOrders = async (req) => {
@@ -27,7 +24,7 @@ export const GetOrders = async (req) => {
 
     return {
       data: bundles,
-      message: "Successfully fetched the Bundles",
+      message: "Successfully fetched the Orders of the store.",
       status: 200,
     };
   } catch (e) {
@@ -53,13 +50,13 @@ export const GetOrdersOverview = async (req) => {
     const [data] = await Orders.aggregate([
       {
         $match: {
-          store: store._id, // Ensure you're matching the correct store
+          store: store._id,
         },
       },
       {
         $lookup: {
           from: "bundles",
-          localField: "bundle", // Match the actual field name (remove "$")
+          localField: "bundle",
           foreignField: "_id",
           as: "bundleDetails",
         },
@@ -67,7 +64,7 @@ export const GetOrdersOverview = async (req) => {
       {
         $unwind: {
           path: "$bundleDetails",
-          preserveNullAndEmptyArrays: true, // Handle cases where no bundleDetails exist
+          preserveNullAndEmptyArrays: true,
         },
       },
       {
@@ -90,13 +87,13 @@ export const GetOrdersOverview = async (req) => {
         $project: {
           _id: 0,
           salesSummary: {
-            total_revenue: { $round: ["$totalRevenue", 2] }, // Round total revenue to 2 decimals
+            total_revenue: { $round: ["$totalRevenue", 2] },
             net_revenue: {
               $round: [
                 { $subtract: ["$totalRevenue", "$totalCostOfGoods"] },
                 2,
               ],
-            }, // Round net revenue to 2 decimals
+            },
           },
           orderSummary: {
             pending: "$pending",
