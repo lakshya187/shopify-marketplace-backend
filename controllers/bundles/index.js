@@ -257,7 +257,7 @@ export const GetOverview = async (req) => {
     return {
       data,
       status: 200,
-      message: "Successfully generated urls to upload images",
+      message: "Successfully fetched the overview for bundles",
     };
   } catch (e) {
     return {
