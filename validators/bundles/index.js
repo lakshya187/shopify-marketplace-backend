@@ -11,6 +11,10 @@ export const validateCreateBundle = Joi.object({
     "string.base": "Description must be a string.",
     "string.max": "Description cannot exceed 500 characters.",
   }),
+  status: Joi.string().max(500).optional().messages({
+    "string.base": "Status must be a string.",
+    "string.max": "Name cannot exceed 100 characters.",
+  }),
   productIds: Joi.array()
     .items(Joi.string().required())
     .min(1)
@@ -28,15 +32,14 @@ export const validateCreateBundle = Joi.object({
   tags: Joi.array().items(Joi.string()).optional().messages({
     "array.base": "Tags must be an array of strings.",
   }),
-  discount: Joi.number().min(0).max(100).optional().messages({
+  discount: Joi.number().min(0).optional().messages({
     "number.base": "Discount must be a number.",
     "number.min": "Discount cannot be less than 0.",
-    "number.max": "Discount cannot exceed 100.",
   }),
   metadata: Joi.object().optional().messages({
     "object.base": "Metadata must be an object.",
   }),
-  costOfGoods: Joi.number().min(0).max(100).optional().messages({
+  costOfGoods: Joi.number().min(0).optional().messages({
     "number.base": "Cost must be a number.",
     "number.min": "Cost cannot be less than 0.",
   }),
@@ -62,16 +65,13 @@ export const validateCreateBundle = Joi.object({
     "string.empty": "Cover Image is required.",
     "string.uri": "Cover Image must be a valid URL.",
   }),
-  images: Joi.array().items(
-    Joi.object({
-      src: Joi.string().uri().required().messages({
-        "string.base": "Image source must be a string.",
-        "string.uri": "Image source must be a valid URL.",
-        "any.required": "Image source is required.",
-      }),
-      altText: Joi.string().optional().messages({
-        "string.base": "Alt Text must be a string.",
-      }),
-    }),
-  ),
+  images: Joi.array().items(Joi.string().required()).messages({
+    "array.base": "Images must be a string of array",
+  }),
+});
+
+export const validateGenerateUrl = Joi.object({
+  filename: Joi.string().required(),
+  mimeType: Joi.string().required(),
+  fileSize: Joi.string().required(),
 });

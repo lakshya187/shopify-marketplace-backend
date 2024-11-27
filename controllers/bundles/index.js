@@ -2,6 +2,7 @@ import GetSingleProduct from "#common-functions/shopify/getSingleProduct.service
 import Bundles from "#schemas/bundles.js";
 import Stores from "#schemas/stores.js";
 import Products from "#schemas/products.js";
+import GenerateImageUploadUrls from "#common-functions/shopify/generateUploadUrl.js";
 
 export const CreateBundle = async (req) => {
   try {
@@ -20,6 +21,7 @@ export const CreateBundle = async (req) => {
       weight,
       images,
       coverImage,
+      status,
     } = req.body;
     const { user } = req;
 
@@ -72,6 +74,7 @@ export const CreateBundle = async (req) => {
       images,
       coverImage,
       profit: Number(price) - Number(costOfGoods),
+      status,
     });
 
     const savedBundle = await bundle.save();
@@ -181,6 +184,80 @@ export const DeleteSingleBundle = async (req) => {
     return {
       message: "Bundle deleted successfully",
       status: 204,
+    };
+  } catch (e) {
+    return {
+      message: e,
+      status: 500,
+    };
+  }
+};
+
+export const GenerateUploadUrl = async (req) => {
+  try {
+    const { filename, mimeType, fileSize } = req.body;
+    const { user } = req;
+    const [store] = await Stores.find({
+      storeUrl: user.storeUrl,
+    }).lean();
+
+    const urls = await GenerateImageUploadUrls({
+      accessToken: store.accessToken,
+      shopName: store.shopName,
+      files: [{ filename, mimeType, fileSize }],
+    });
+
+    return {
+      data: urls,
+      status: 200,
+      message: "Successfully generated image upload URLs",
+    };
+  } catch (e) {
+    return {
+      message: e,
+      status: 500,
+    };
+  }
+};
+
+export const GetOverview = async (req) => {
+  try {
+    const { user } = req;
+    const [store] = await Stores.find({
+      storeUrl: user.storeUrl,
+    }).lean();
+
+    const [data] = await Bundles.aggregate([
+      {
+        $match: {
+          store: store._id,
+        },
+      },
+      {
+        $group: {
+          _id: null,
+          total_bundles: { $sum: 1 },
+          total_bundles_value: { $sum: "$price" },
+          total_active_bundles: {
+            $sum: {
+              $cond: [{ $eq: ["$status", "active"] }, 1, 0],
+            },
+          },
+        },
+      },
+      {
+        $project: {
+          _id: 0,
+          total_bundles: 1,
+          total_bundles_value: { $round: ["$total_bundles_value", 2] },
+          total_active_bundles: 1,
+        },
+      },
+    ]);
+    return {
+      data,
+      status: 200,
+      message: "Successfully fetched the overview for bundles",
     };
   } catch (e) {
     return {
