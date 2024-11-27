@@ -65,9 +65,11 @@ export const validateCreateBundle = Joi.object({
     "string.empty": "Cover Image is required.",
     "string.uri": "Cover Image must be a valid URL.",
   }),
-  images: Joi.array().items(Joi.string().required()).messages({
+  images: Joi.array().items(Joi.string()).messages({
     "array.base": "Images must be a string of array",
   }),
+  inventory: Joi.number(),
+  trackInventory: Joi.boolean(),
 });
 
 export const validateGenerateUrl = Joi.object({

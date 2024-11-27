@@ -22,6 +22,8 @@ export const CreateBundle = async (req) => {
       images,
       coverImage,
       status,
+      inventory,
+      trackInventory,
     } = req.body;
     const { user } = req;
 
@@ -75,6 +77,8 @@ export const CreateBundle = async (req) => {
       coverImage,
       profit: Number(price) - Number(costOfGoods),
       status,
+      inventory,
+      trackInventory,
     });
 
     const savedBundle = await bundle.save();
