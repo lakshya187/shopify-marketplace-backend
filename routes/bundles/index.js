@@ -9,6 +9,7 @@ import {
   DELETE_BUNDLE,
   GENERATE_UPLOAD_URL,
   GET_OVERVIEW,
+  UPDATE_BUNDLE,
 } from "../../constants/routes/bundles/index.js";
 import {
   CreateBundle,
@@ -17,6 +18,7 @@ import {
   DeleteSingleBundle,
   GenerateUploadUrl,
   GetOverview,
+  UpdateBundle,
 } from "../../controllers/bundles/index.js";
 import AuthMiddleware from "../../middlewares/authentication.js";
 import ValidateMiddleware from "../../validators/index.js";
@@ -146,6 +148,24 @@ export default () => {
       }
     },
   );
+
+  BundleRoutes.put(UPDATE_BUNDLE, AuthMiddleware, async (req, res) => {
+    try {
+      const data = await UpdateBundle(req);
+      return SuccessResponseHandler(req, res, {
+        status: data.status,
+        message: data.message,
+        data: data.data,
+      });
+    } catch (error) {
+      logger("error", "Error when generating upload url", error);
+      return ErrorResponseHandler(
+        req,
+        res,
+        error.message || "Internal server error",
+      );
+    }
+  });
 
   return BundleRoutes;
 };

@@ -14,6 +14,7 @@ export const GetCustomerReport = async (req) => {
     }
     const data = await Users.aggregate([
       {
+        // Lookup orders for each user
         $lookup: {
           from: "orders",
           localField: "_id",
@@ -22,11 +23,32 @@ export const GetCustomerReport = async (req) => {
         },
       },
       {
+        $unwind: {
+          path: "$orders",
+          preserveNullAndEmptyArrays: true,
+        },
+      },
+      {
+        $match: {
+          "orders.store": store._id,
+        },
+      },
+      {
+        $group: {
+          _id: "$_id",
+          name: { $first: "$name" },
+          email: { $first: "$email" },
+          contactNumber: { $first: "$contactNumber" },
+          city: { $first: "$address.state" },
+          orders: { $push: "$orders" },
+        },
+      },
+      {
         $project: {
           name: 1,
           email: 1,
           contactNumber: 1,
-          city: "$address.state",
+          city: 1,
           orderCount: { $size: "$orders" },
           lifetimeSpending: {
             $sum: "$orders.amount",
@@ -86,11 +108,33 @@ export const GetUserOverview = async (req) => {
         },
       },
       {
+        // Filter orders to include only those matching the specified store._id
+        $addFields: {
+          orders: {
+            $filter: {
+              input: "$orders",
+              as: "order",
+              cond: {
+                $eq: ["$$order.store", store._id], // Replace with actual store._id
+              },
+            },
+          },
+        },
+      },
+      {
+        // Match users who have at least one order for the store
+        $match: {
+          "orders.0": { $exists: true },
+        },
+      },
+      {
+        // Add a computed field for order count
         $addFields: {
           orderCount: { $size: "$orders" },
         },
       },
       {
+        // Group to calculate total users, repeat customers, and new customers
         $group: {
           _id: null,
           total_users: { $sum: 1 },
@@ -103,6 +147,7 @@ export const GetUserOverview = async (req) => {
         },
       },
       {
+        // Project the final result
         $project: {
           _id: 0,
           total_users: 1,

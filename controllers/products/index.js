@@ -1,5 +1,5 @@
 import Stores from "#schemas/stores.js";
-import SearchProductOnShopify from "#common-functions/shopify/getStoreProducts.service.js";
+import SearchProductOnShopify from "#common-functions/shopify/getStoreProducts.js";
 
 export const GetProducts = async (req) => {
   try {

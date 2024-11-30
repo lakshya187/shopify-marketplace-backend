@@ -5,8 +5,10 @@ import SuccessResponseHandler from "#common-functions/utils/successResponseHandl
 import {
   GET_ORDERS,
   GET_OVERVIEW,
+  CANCEL_ORDER,
 } from "../../constants/routes/orders/index.js";
 import {
+  CancelOrder,
   GetOrders,
   GetOrdersOverview,
 } from "../../controllers/orders/index.js";
@@ -35,6 +37,24 @@ export default () => {
   OrderRoutes.get(GET_OVERVIEW, AuthMiddleware, async (req, res) => {
     try {
       const data = await GetOrdersOverview(req);
+      return SuccessResponseHandler(req, res, {
+        status: data.status,
+        message: data.message,
+        data: data.data,
+      });
+    } catch (e) {
+      logger("error", "Error creating bundle", e);
+      return ErrorResponseHandler(
+        req,
+        res,
+        error.message || "Internal server error",
+      );
+    }
+  });
+
+  OrderRoutes.post(CANCEL_ORDER, AuthMiddleware, async (req, res) => {
+    try {
+      const data = await CancelOrder(req);
       return SuccessResponseHandler(req, res, {
         status: data.status,
         message: data.message,

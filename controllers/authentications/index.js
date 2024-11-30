@@ -199,7 +199,7 @@ export async function LoginFromPassword(req) {
 
   try {
     const authentication = await Authentications.findOne({
-      email,
+      storeUrl: email,
     }).lean();
 
     if (!authentication) {
