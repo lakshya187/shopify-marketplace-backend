@@ -22,6 +22,7 @@ export const GetOrders = async (req) => {
         $ne: "cancelled",
       },
     })
+      .populate("user")
       .skip(Number(skip) || 0)
       .limit(Number(limit) || 10)
       .sort({ createdAt: -1 });

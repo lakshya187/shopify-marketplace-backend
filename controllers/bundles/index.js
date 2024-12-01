@@ -39,16 +39,24 @@ export const CreateBundle = async (req) => {
         message: "Store not found",
       };
     }
-    // fetch all the products before saving the bundle
     const products = await Promise.all(
       productIds
-        .map(async (id) => {
+        .map(async (productObj) => {
           const product = await GetSingleProduct({
             accessToken: store.accessToken,
-            productId: id,
+            productId: productObj.productId,
             shopName: store.shopName,
           });
-          if (product) {
+          const isVariantValid = product.variants.find(
+            (v) => v.id === productObj.variantId,
+          );
+
+          if (product && isVariantValid) {
+            product.selectedVariant = isVariantValid;
+            product.length = productObj.dimensions.length || "";
+            product.weight = productObj.dimensions.weight || "";
+            product.width = productObj.dimensions.width || "";
+            product.height = productObj.dimensions.height || "";
             return product;
           }
           return null;
@@ -85,13 +93,15 @@ export const CreateBundle = async (req) => {
 
     const savedBundle = await bundle.save();
 
-    await Promise.all(
-      products.map(async (product) => {
-        product.productId = product.id;
-        product.bundle = bundle._id;
-        await Products.create(product);
-      }),
-    );
+    const bundleProducts = products.map((product) => {
+      product.productId = product.id;
+      product.bundle = bundle._id;
+      delete product.id;
+      return product;
+    });
+
+    await Products.insertMany(bundleProducts);
+
     return {
       status: 201,
       message: "Successfully created the bundle",
@@ -156,7 +166,18 @@ export const GetSingleBundle = async (req) => {
       bundle: bundle._id,
     }).lean();
 
-    bundleObj.productIds = products.map((product) => product.productId);
+    bundleObj.productIds = products.map((product) => {
+      return {
+        productId: product.productId,
+        variantId: product.selectedVariant.id,
+        dimensions: {
+          length: product.length,
+          width: product.width,
+          height: product.height,
+          weight: product.weight,
+        },
+      };
+    });
     return {
       data: bundleObj,
       status: 200,
@@ -331,7 +352,6 @@ export const UpdateBundle = async (req) => {
         message: "No internal store exists",
       };
     }
-    // validate the bundle
     const doesBundleExists = await Bundles.findById(id)
       .populate("store")
       .lean();
@@ -343,16 +363,23 @@ export const UpdateBundle = async (req) => {
       };
     }
 
-    // fetch all the products before saving the bundle
     const products = await Promise.all(
       productIds
-        .map(async (id) => {
+        .map(async (productObj) => {
           const product = await GetSingleProduct({
             accessToken: store.accessToken,
-            productId: id,
+            productId: productObj.productId,
             shopName: store.shopName,
           });
-          if (product) {
+          const isVariantValid = product.variants.find(
+            (v) => v.id === productObj.variantId,
+          );
+          if (product && isVariantValid) {
+            product.selectedVariant = isVariantValid;
+            product.length = productObj.dimensions.length || "";
+            product.weight = productObj.dimensions.weight || "";
+            product.width = productObj.dimensions.width || "";
+            product.height = productObj.dimensions.height || "";
             return product;
           }
           return null;
@@ -371,7 +398,6 @@ export const UpdateBundle = async (req) => {
       price,
       tags,
       discount,
-
       costOfGoods,
       isOnSale,
       width,
@@ -385,9 +411,19 @@ export const UpdateBundle = async (req) => {
       name,
       description,
     };
+    // delete the existing products of the bundle.
+    await Products.deleteMany({ bundle: id });
+
+    const bundleProducts = products.map((product) => {
+      product.productId = product.id;
+      product.bundle = id;
+      delete product.id;
+      return product;
+    });
+
+    await Products.insertMany(bundleProducts);
 
     // update the bundle on merchant, marketplace, db
-
     const updatedBundle = await Bundles.findByIdAndUpdate(id, bundleUpdateObj, {
       new: true,
     }).lean();
@@ -401,15 +437,17 @@ export const UpdateBundle = async (req) => {
       productId: doesBundleExists.shopifyProductId,
       inventoryDelta,
     });
-
-    const vendor = UpdateProduct({
-      accessToken: store.accessToken,
-      shopName: store.shopName,
-      bundle: updatedBundle,
-      productId: doesBundleExists.metadata.vendorShopifyId,
-      products: products,
-      inventoryDelta,
-    });
+    let vendor;
+    if (doesBundleExists.metadata?.vendorShopifyId) {
+      vendor = UpdateProduct({
+        accessToken: store.accessToken,
+        shopName: store.shopName,
+        bundle: updatedBundle,
+        productId: doesBundleExists.metadata.vendorShopifyId,
+        products: products,
+        inventoryDelta,
+      });
+    }
     await Promise.all([marketPlace, vendor]);
     return {
       status: 200,
