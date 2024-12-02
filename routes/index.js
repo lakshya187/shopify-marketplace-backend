@@ -8,6 +8,8 @@ import StoreBoxOrdersRoutes from "./storeBoxOrders/index.js";
 import CouponRoutes from "./coupons/index.js";
 import BoxRoutes from "./boxes/index.js";
 import StoreBoxRoutes from "./storeBoxes/index.js";
+import SupportTicketsRoutes from "./supportTickets/index.js";
+
 const RouteHandler = Router();
 
 export default () => {
@@ -20,6 +22,7 @@ export default () => {
   RouteHandler.use("/store-box-orders", StoreBoxOrdersRoutes());
   RouteHandler.use("/boxes", BoxRoutes());
   RouteHandler.use("/store-boxes", StoreBoxRoutes());
+  RouteHandler.use("/support-tickets", SupportTicketsRoutes());
 
   return RouteHandler;
 };

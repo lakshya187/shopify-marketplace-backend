@@ -10,6 +10,7 @@ import {
   GENERATE_UPLOAD_URL,
   GET_OVERVIEW,
   UPDATE_BUNDLE,
+  GET_BUNDLE_INVENTORY_OVERVIEW,
 } from "../../constants/routes/bundles/index.js";
 import {
   CreateBundle,
@@ -19,6 +20,7 @@ import {
   GenerateUploadUrl,
   GetOverview,
   UpdateBundle,
+  FetchInventoryOverview,
 } from "../../controllers/bundles/index.js";
 import AuthMiddleware from "../../middlewares/authentication.js";
 import ValidateMiddleware from "../../validators/index.js";
@@ -29,6 +31,28 @@ import {
 const BundleRoutes = Router();
 
 export default () => {
+  BundleRoutes.get(
+    GET_BUNDLE_INVENTORY_OVERVIEW,
+    AuthMiddleware,
+    async (req, res) => {
+      try {
+        const data = await FetchInventoryOverview(req);
+        return SuccessResponseHandler(req, res, {
+          status: data.status,
+          message: data.message,
+          data: data.data,
+        });
+      } catch (error) {
+        logger("error", "Error when generating upload url", error);
+        return ErrorResponseHandler(
+          req,
+          res,
+          error.message || "Internal server error",
+        );
+      }
+    },
+  );
+
   BundleRoutes.get(GET_OVERVIEW, AuthMiddleware, async (req, res) => {
     try {
       const data = await GetOverview(req);

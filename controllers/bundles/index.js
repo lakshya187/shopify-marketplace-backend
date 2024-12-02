@@ -462,3 +462,61 @@ export const UpdateBundle = async (req) => {
     };
   }
 };
+
+export const FetchInventoryOverview = async (req) => {
+  try {
+    const { user } = req;
+    const [store] = await Stores.find({
+      storeUrl: user.storeUrl,
+    }).lean();
+
+    if (!store) {
+      return {
+        status: 400,
+        message: "Store not found",
+      };
+    }
+    const [data] = await Bundles.aggregate([
+      {
+        $match: {
+          store: store._id,
+        },
+      },
+      {
+        $group: {
+          _id: null,
+          out_of_stock: {
+            $sum: { $cond: [{ $eq: ["$inventory", 0] }, 1, 0] },
+          },
+          low_stock: {
+            $sum: {
+              $cond: [
+                {
+                  $and: [
+                    { $gt: ["$inventory", 0] },
+                    { $lt: ["$inventory", 10] },
+                  ],
+                },
+                1,
+                0,
+              ],
+            },
+          },
+        },
+      },
+    ]);
+    if (data) {
+      delete data._id;
+    }
+    return {
+      data,
+      message: "Successfully fetched the inventory overview.",
+      status: 200,
+    };
+  } catch (e) {
+    return {
+      message: e,
+      status: 500,
+    };
+  }
+};
