@@ -23,12 +23,12 @@ export const CreateStoreBoxOrder = async (req) => {
     let totalQuantity = 0;
 
     orderItems.forEach((item) => {
-      if (!item.box || !item.quantity || item.quantity <= 0) {
+      if (!item.box || !item.quantity || Number(item.quantity) <= 0) {
         throw new Error(
           "Each order item must include a valid packaging ID and a positive quantity.",
         );
       }
-      totalQuantity += item.quantity;
+      totalQuantity += Number(item.quantity);
     });
 
     const newOrder = new StoreBoxOrders({
@@ -96,7 +96,12 @@ export const UpdateStoreBoxOrder = async (req) => {
     const [store] = await Stores.find({
       storeUrl: user.storeUrl,
     }).lean();
-
+    if (!store.isInternalStore) {
+      return {
+        status: 401,
+        message: "You are not allowed to modify this order",
+      };
+    }
     if (!store) {
       return {
         status: 400,
@@ -119,7 +124,7 @@ export const UpdateStoreBoxOrder = async (req) => {
       };
     }
     const [storeBoxInventory] = await StoreBoxes.find({
-      store: store._id,
+      store: doesBoxOrderExists.store,
     }).lean();
     if (status === "delivered")
       if (storeBoxInventory) {
@@ -133,7 +138,7 @@ export const UpdateStoreBoxOrder = async (req) => {
         const updateObj = {};
       } else {
         const storeBoxInventory = new StoreBoxes({
-          store: store._id,
+          store: doesBoxOrderExists.store,
           inventory: doesBoxOrderExists.orderItems,
         });
         const newStoreInventory = await storeBoxInventory.save();
