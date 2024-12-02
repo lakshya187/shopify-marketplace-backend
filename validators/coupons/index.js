@@ -78,4 +78,5 @@ export const CouponValidationSchema = Joi.object({
   limitTheNumberOfUse: Joi.boolean().default(false).messages({
     "boolean.base": "Limit the number of use must be a boolean.",
   }),
+  status: Joi.optional(),
 });

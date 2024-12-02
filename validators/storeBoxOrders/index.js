@@ -27,8 +27,6 @@ export const CreateStoreBoxOrderSchema = Joi.object({
     }),
 });
 
-import Joi from "joi";
-
 export const UpdateStoreBoxOrderBodySchema = Joi.object({
   status: Joi.string().valid("delivered", "cancelled").required().messages({
     "string.base": "Status must be a string.",
