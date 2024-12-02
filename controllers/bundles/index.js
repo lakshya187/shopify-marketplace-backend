@@ -1,8 +1,10 @@
-import GetSingleProduct from "#common-functions/shopify/getSingleProduct.service.js";
+import GetSingleProduct from "#common-functions/shopify/getSingleProduct.js";
 import Bundles from "#schemas/bundles.js";
 import Stores from "#schemas/stores.js";
 import Products from "#schemas/products.js";
 import GenerateImageUploadUrls from "#common-functions/shopify/generateUploadUrl.js";
+import DeleteProduct from "#common-functions/shopify/deleteProduct.js";
+import UpdateProduct from "#common-functions/shopify/updateProduct.js";
 
 export const CreateBundle = async (req) => {
   try {
@@ -37,16 +39,24 @@ export const CreateBundle = async (req) => {
         message: "Store not found",
       };
     }
-    // fetch all the products before saving the bundle
     const products = await Promise.all(
       productIds
-        .map(async (id) => {
+        .map(async (productObj) => {
           const product = await GetSingleProduct({
             accessToken: store.accessToken,
-            productId: id,
+            productId: productObj.productId,
             shopName: store.shopName,
           });
-          if (product) {
+          const isVariantValid = product.variants.find(
+            (v) => v.id === productObj.variantId,
+          );
+
+          if (product && isVariantValid) {
+            product.selectedVariant = isVariantValid;
+            product.length = productObj.dimensions.length || "";
+            product.weight = productObj.dimensions.weight || "";
+            product.width = productObj.dimensions.width || "";
+            product.height = productObj.dimensions.height || "";
             return product;
           }
           return null;
@@ -83,13 +93,15 @@ export const CreateBundle = async (req) => {
 
     const savedBundle = await bundle.save();
 
-    await Promise.all(
-      products.map(async (product) => {
-        product.productId = product.id;
-        product.bundle = bundle._id;
-        await Products.create(product);
-      }),
-    );
+    const bundleProducts = products.map((product) => {
+      product.productId = product.id;
+      product.bundle = bundle._id;
+      delete product.id;
+      return product;
+    });
+
+    await Products.insertMany(bundleProducts);
+
     return {
       status: 201,
       message: "Successfully created the bundle",
@@ -141,14 +153,33 @@ export const GetSingleBundle = async (req) => {
   try {
     const { bundleId } = req.params;
     const bundle = await Bundles.findById(bundleId);
+
     if (!bundle) {
       return {
         message: "Could not find the Bundle",
         status: 400,
       };
     }
+    const bundleObj = bundle.toObject();
+
+    const products = await Products.find({
+      bundle: bundle._id,
+    }).lean();
+
+    bundleObj.productIds = products.map((product) => {
+      return {
+        productId: product.productId,
+        variantId: product.selectedVariant.id,
+        dimensions: {
+          length: product.length,
+          width: product.width,
+          height: product.height,
+          weight: product.weight,
+        },
+      };
+    });
     return {
-      data: bundle,
+      data: bundleObj,
       status: 200,
       message: "Successfully fetched the bundle",
     };
@@ -177,14 +208,21 @@ export const DeleteSingleBundle = async (req) => {
       storeUrl: user.storeUrl,
     }).lean();
 
-    if (bundle.store !== store._id) {
+    if (!bundle.store.equals(store._id)) {
+      console.log(bundle.store, store._id);
       return {
         status: 401,
         message: "You are not authorized to delete this bundled",
       };
     }
-
-    await Bundles.findByIdAndDelete(bundleId);
+    await Promise.all([
+      Bundles.findByIdAndDelete(bundleId),
+      DeleteProduct({
+        accessToken: store.accessToken,
+        shopName: store.shopName,
+        productId: bundle.shopifyProductId,
+      }),
+    ]);
     return {
       message: "Bundle deleted successfully",
       status: 204,
@@ -263,6 +301,160 @@ export const GetOverview = async (req) => {
       status: 200,
       message: "Successfully fetched the overview for bundles",
     };
+  } catch (e) {
+    return {
+      message: e,
+      status: 500,
+    };
+  }
+};
+
+export const UpdateBundle = async (req) => {
+  try {
+    const {
+      name,
+      description,
+      productIds,
+      price,
+      tags,
+      discount,
+      metadata,
+      costOfGoods,
+      isOnSale,
+      width,
+      length,
+      weight,
+      images,
+      coverImage,
+      status,
+      inventory,
+      trackInventory,
+    } = req.body;
+    const { user } = req;
+    const { id } = req.params;
+
+    const [store] = await Stores.find({
+      storeUrl: user.storeUrl,
+    }).lean();
+
+    if (!store) {
+      return {
+        status: 400,
+        message: "Store not found",
+      };
+    }
+    const [internalStore] = await Stores.find({
+      isInternalStore: true,
+    });
+    if (!internalStore) {
+      return {
+        status: 400,
+        message: "No internal store exists",
+      };
+    }
+    const doesBundleExists = await Bundles.findById(id)
+      .populate("store")
+      .lean();
+
+    if (!doesBundleExists) {
+      return {
+        message: "Bundle id is not valid",
+        status: 400,
+      };
+    }
+
+    const products = await Promise.all(
+      productIds
+        .map(async (productObj) => {
+          const product = await GetSingleProduct({
+            accessToken: store.accessToken,
+            productId: productObj.productId,
+            shopName: store.shopName,
+          });
+          const isVariantValid = product.variants.find(
+            (v) => v.id === productObj.variantId,
+          );
+          if (product && isVariantValid) {
+            product.selectedVariant = isVariantValid;
+            product.length = productObj.dimensions.length || "";
+            product.weight = productObj.dimensions.weight || "";
+            product.width = productObj.dimensions.width || "";
+            product.height = productObj.dimensions.height || "";
+            return product;
+          }
+          return null;
+        })
+        .filter(Boolean),
+    );
+
+    if (productIds.length !== products.length) {
+      return {
+        message: "Not all the product ids provided are valid",
+        status: 400,
+      };
+    }
+
+    const bundleUpdateObj = {
+      price,
+      tags,
+      discount,
+      costOfGoods,
+      isOnSale,
+      width,
+      length,
+      weight,
+      images,
+      coverImage,
+      status,
+      inventory,
+      trackInventory,
+      name,
+      description,
+    };
+    // delete the existing products of the bundle.
+    await Products.deleteMany({ bundle: id });
+
+    const bundleProducts = products.map((product) => {
+      product.productId = product.id;
+      product.bundle = id;
+      delete product.id;
+      return product;
+    });
+
+    await Products.insertMany(bundleProducts);
+
+    // update the bundle on merchant, marketplace, db
+    const updatedBundle = await Bundles.findByIdAndUpdate(id, bundleUpdateObj, {
+      new: true,
+    }).lean();
+
+    const inventoryDelta = updatedBundle.inventory - doesBundleExists.inventory;
+    const marketPlace = UpdateProduct({
+      accessToken: internalStore.accessToken,
+      shopName: internalStore.shopName,
+      bundle: updatedBundle,
+      products: products,
+      productId: doesBundleExists.shopifyProductId,
+      inventoryDelta,
+    });
+    let vendor;
+    if (doesBundleExists.metadata?.vendorShopifyId) {
+      vendor = UpdateProduct({
+        accessToken: store.accessToken,
+        shopName: store.shopName,
+        bundle: updatedBundle,
+        productId: doesBundleExists.metadata.vendorShopifyId,
+        products: products,
+        inventoryDelta,
+      });
+    }
+    await Promise.all([marketPlace, vendor]);
+    return {
+      status: 200,
+      message: "Bundle updated successfully",
+    };
+
+    // const
   } catch (e) {
     return {
       message: e,

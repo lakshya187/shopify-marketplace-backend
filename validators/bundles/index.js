@@ -15,15 +15,7 @@ export const validateCreateBundle = Joi.object({
     "string.base": "Status must be a string.",
     "string.max": "Name cannot exceed 100 characters.",
   }),
-  productIds: Joi.array()
-    .items(Joi.string().required())
-    .min(1)
-    .required()
-    .messages({
-      "array.base": "Product IDs must be an array of strings.",
-      "array.min": "At least one product ID is required.",
-      "any.required": "Product IDs are required.",
-    }),
+  productIds: Joi.array().min(1).required(),
   price: Joi.number().positive().required().messages({
     "number.base": "Price must be a number.",
     "number.positive": "Price must be a positive number.",

@@ -1,10 +1,10 @@
 import Stores from "#schemas/stores.js";
-import SearchProductOnShopify from "#common-functions/shopify/getStoreProducts.service.js";
+import SearchProductOnShopify from "#common-functions/shopify/getStoreProducts.js";
 
 export const GetProducts = async (req) => {
   try {
     const { user } = req;
-    const { skip, limit } = req.query;
+    const { skip, limit, search } = req.query;
 
     const store = await Stores.findOne({ storeUrl: user.storeUrl }).lean();
 
@@ -13,6 +13,7 @@ export const GetProducts = async (req) => {
       shopName: store.shopName,
       afterCursor: skip,
       limit,
+      searchTerm: search,
     });
     return {
       status: 200,
