@@ -34,6 +34,17 @@ export const CreateCoupon = async (req) => {
         message: "Store not found",
       };
     }
+    const [internalStore] = await Stores.find({
+      isActive: true,
+      isInternalStore: true,
+    }).lean();
+
+    if (!internalStore) {
+      return {
+        message: "Internal store does not exists",
+        status: 400,
+      };
+    }
 
     // Check if the code already exists
     const existingCoupon = await Coupons.findOne({ code });
@@ -73,9 +84,9 @@ export const CreateCoupon = async (req) => {
 
     // save the coupon in shopify
     const shopifyCoupon = await CreateDiscountCode({
-      accessToken: store.accessToken,
+      accessToken: internalStore.accessToken,
       coupon: shopifyCouponObj,
-      shopName: store.shopName,
+      shopName: internalStore.shopName,
     });
     if (shopifyCoupon.id) {
       couponObj["shopifyId"] = shopifyCoupon.id;
