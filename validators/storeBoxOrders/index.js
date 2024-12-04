@@ -30,9 +30,13 @@ export const CreateStoreBoxOrderSchema = Joi.object({
 export const UpdateStoreBoxOrderBodySchema = Joi.object({
   status: Joi.string().valid("delivered", "cancelled").required().messages({
     "string.base": "Status must be a string.",
-    "any.only":
-      "Status must be one of 'delivered', 'pending', 'cancelled', or 'in-progress'.",
+    "any.only": "Status must be one of 'delivered' or 'cancelled'.",
     "string.empty": "Status cannot be empty.",
     "any.required": "Status is required.",
+  }),
+  id: Joi.string().required().messages({
+    "string.base": "Id must be a string.",
+    "string.empty": "Id cannot be empty.",
+    "any.required": "Id is required.",
   }),
 });
