@@ -9,7 +9,6 @@ import ValidateMiddleware from "../../validators/index.js";
 import { CouponValidationSchema } from "#validators/coupons/index.js";
 
 const CouponRoutes = Router();
-CouponValidationSchema;
 export default () => {
   CouponRoutes.post(
     CREATE_COUPON,

@@ -5,6 +5,7 @@ import Products from "#schemas/products.js";
 import GenerateImageUploadUrls from "#common-functions/shopify/generateUploadUrl.js";
 import DeleteProduct from "#common-functions/shopify/deleteProduct.js";
 import UpdateProduct from "#common-functions/shopify/updateProduct.js";
+import Categories from "#schemas/categories.js";
 
 export const CreateBundle = async (req) => {
   try {
@@ -26,6 +27,8 @@ export const CreateBundle = async (req) => {
       status,
       inventory,
       trackInventory,
+      category,
+      box,
     } = req.body;
     const { user } = req;
 
@@ -70,11 +73,18 @@ export const CreateBundle = async (req) => {
         status: 400,
       };
     }
+    const doesCategoryExists = await Categories.findById(category).lean();
+    if (!doesCategoryExists) {
+      return {
+        message: "The category does not exists",
+        status: 400,
+      };
+    }
     const bundle = new Bundles({
       name,
       description,
       store: store._id,
-      price,
+      price: Number(price) - Number(discount) ?? 0,
       tags: tags || [],
       discount: discount || 0,
       metadata: metadata || {},
@@ -89,6 +99,8 @@ export const CreateBundle = async (req) => {
       status,
       inventory,
       trackInventory,
+      category,
+      box,
     });
 
     const savedBundle = await bundle.save();
@@ -127,13 +139,15 @@ export const GetBundles = async (req) => {
         message: "Store not found",
       };
     }
-    const { skip, limit } = req.query;
+    const { page } = req.query;
+    const limit = 10;
+    const skip = (Number(page) - 1) * 10;
 
     const bundles = await Bundles.find({
       store: store._id,
     })
-      .skip(Number(skip) || 0)
-      .limit(Number(limit) || 10)
+      .skip(skip)
+      .limit(limit)
       .sort({ createdAt: -1 });
 
     return {
@@ -329,6 +343,8 @@ export const UpdateBundle = async (req) => {
       status,
       inventory,
       trackInventory,
+      category,
+      box,
     } = req.body;
     const { user } = req;
     const { id } = req.params;
@@ -386,7 +402,13 @@ export const UpdateBundle = async (req) => {
         })
         .filter(Boolean),
     );
-
+    const doesCategoryExists = await Categories.findById(category);
+    if (!doesCategoryExists) {
+      return {
+        message: "The category does not exists",
+        status: 400,
+      };
+    }
     if (productIds.length !== products.length) {
       return {
         message: "Not all the product ids provided are valid",
@@ -395,7 +417,7 @@ export const UpdateBundle = async (req) => {
     }
 
     const bundleUpdateObj = {
-      price,
+      price: Number(price) - Number(discount) ?? 0,
       tags,
       discount,
       costOfGoods,
@@ -410,6 +432,8 @@ export const UpdateBundle = async (req) => {
       trackInventory,
       name,
       description,
+      category,
+      box,
     };
     // delete the existing products of the bundle.
     await Products.deleteMany({ bundle: id });
@@ -426,7 +450,9 @@ export const UpdateBundle = async (req) => {
     // update the bundle on merchant, marketplace, db
     const updatedBundle = await Bundles.findByIdAndUpdate(id, bundleUpdateObj, {
       new: true,
-    }).lean();
+    })
+      .populate("category")
+      .lean();
 
     const inventoryDelta = updatedBundle.inventory - doesBundleExists.inventory;
     const marketPlace = UpdateProduct({

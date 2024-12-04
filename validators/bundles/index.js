@@ -62,6 +62,8 @@ export const validateCreateBundle = Joi.object({
   }),
   inventory: Joi.number(),
   trackInventory: Joi.boolean(),
+  category: Joi.string().optional(),
+  box: Joi.string().required(),
 });
 
 export const validateGenerateUrl = Joi.object({

@@ -106,8 +106,10 @@ export const CreateCoupon = async (req) => {
 
 export const GetCoupons = async (req) => {
   try {
-    const { user, query } = req;
-    const { limit = 10, skip = 0 } = query;
+    const { user } = req;
+    const { page = 1 } = req.query;
+    const limit = 10;
+    const skip = (Number(page) - 1) * limit;
 
     const [store] = await Stores.find({
       storeUrl: user.storeUrl,

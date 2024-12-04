@@ -55,8 +55,10 @@ export const CreateStoreBoxOrder = async (req) => {
 export const GetAllBoxOrders = async (req) => {
   try {
     const { user } = req;
-    const { skip = 0, limit = 10 } = req.query;
 
+    const { page = 1 } = req.query;
+    const limit = 10;
+    const skip = (Number(page) - 1) * limit;
     // Find the store based on the authenticated user's store URL
     const store = await Stores.findOne({ storeUrl: user.storeUrl }).lean();
 
@@ -72,8 +74,8 @@ export const GetAllBoxOrders = async (req) => {
         path: "orderItems.box",
       })
       .sort({ createdAt: -1 })
-      .skip(Number(skip))
-      .limit(Number(limit))
+      .skip(skip)
+      .limit(limit)
       .lean();
 
     return {

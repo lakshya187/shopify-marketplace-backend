@@ -9,6 +9,8 @@ import CouponRoutes from "./coupons/index.js";
 import BoxRoutes from "./boxes/index.js";
 import StoreBoxRoutes from "./storeBoxes/index.js";
 import SupportTicketsRoutes from "./supportTickets/index.js";
+import NotificationRoutes from "./notifications/index.js";
+import CategoriesRoutes from "./categories/index.js";
 
 const RouteHandler = Router();
 
@@ -23,6 +25,8 @@ export default () => {
   RouteHandler.use("/boxes", BoxRoutes());
   RouteHandler.use("/store-boxes", StoreBoxRoutes());
   RouteHandler.use("/support-tickets", SupportTicketsRoutes());
+  RouteHandler.use("/notifications", NotificationRoutes());
+  RouteHandler.use("/categories", CategoriesRoutes());
 
   return RouteHandler;
 };

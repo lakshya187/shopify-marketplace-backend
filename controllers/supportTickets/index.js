@@ -43,8 +43,10 @@ export const CreateSupportTicket = async (req) => {
 
 export const GetSupportTickets = async (req) => {
   try {
-    const { user, query } = req;
-    const { limit = 10, skip = 0, status } = query;
+    const { user } = req;
+    const { page = 1, status } = req.query;
+    const limit = 10;
+    const skip = (Number(page) - 1) * limit;
 
     const [store] = await Stores.find({
       storeUrl: user.storeUrl,
