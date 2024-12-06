@@ -21,6 +21,7 @@ export const CreateStoreBoxOrder = async (req) => {
     }
 
     let totalQuantity = 0;
+    const orderMap = {};
 
     orderItems.forEach((item) => {
       if (!item.box || !item.quantity || Number(item.quantity) <= 0) {
@@ -28,12 +29,19 @@ export const CreateStoreBoxOrder = async (req) => {
           "Each order item must include a valid packaging ID and a positive quantity.",
         );
       }
+      if (!orderMap[item.box]) {
+        orderMap[item.box] = {
+          box: item.box,
+          quantity: 0,
+        };
+      }
+      orderMap[item.box]["quantity"] += Number(item.quantity);
       totalQuantity += Number(item.quantity);
     });
-
+    const mergedOrderItems = Object.values(orderMap);
     const newOrder = new StoreBoxOrders({
       store: store._id,
-      orderItems,
+      orderItems: mergedOrderItems,
       totalQuantity,
     });
 

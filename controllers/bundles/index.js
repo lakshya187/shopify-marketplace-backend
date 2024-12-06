@@ -29,6 +29,7 @@ export const CreateBundle = async (req) => {
       trackInventory,
       category,
       box,
+      vendor,
     } = req.body;
     const { user } = req;
 
@@ -80,11 +81,12 @@ export const CreateBundle = async (req) => {
         status: 400,
       };
     }
+    const netPrice = Number(price) - Number(discount || 0);
     const bundle = new Bundles({
       name,
       description,
       store: store._id,
-      price: Number(price) - Number(discount) ?? 0,
+      price: netPrice,
       tags: tags || [],
       discount: discount || 0,
       metadata: metadata || {},
@@ -101,6 +103,7 @@ export const CreateBundle = async (req) => {
       trackInventory,
       category,
       box,
+      vendor,
     });
 
     const savedBundle = await bundle.save();

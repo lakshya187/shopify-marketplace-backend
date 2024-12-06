@@ -74,9 +74,14 @@ export const CreateCoupon = async (req) => {
       maxNumberOfUse,
       limitTheNumberOfUse,
     };
-    const bundles = await Bundles.find({
-      _id: { $in: bundleIds },
-    }).lean();
+    const bundleFilter = { isCreatedOnShopify: true };
+    if (appliesTo === "all") {
+      bundleFilter["store"] = store._id;
+    } else if (appliesTo === "products") {
+      bundleFilter["_id"] = { $in: bundleIds };
+      bundleFilter["store"] = store._id;
+    }
+    const bundles = await Bundles.find(bundleFilter).lean();
 
     const shopifyBundleIds = bundles.map((b) => b.shopifyProductId);
     const shopifyCouponObj = { ...couponObj };

@@ -7,7 +7,7 @@ import QueryString from "querystring";
 import PasswordGenerator from "generate-password";
 import { EncryptJWT, DecryptJWT } from "#utils/auth.js";
 import AddInitialWebhooks from "#utils/shopify/add-initial-webhooks.js";
-// import publish from "../../common-functions/redis/publish.js";
+import RedisEventPublisher from "#common-functions/redis/publish.js";
 
 export async function RedirectToShopifyAuth(req) {
   const { shop } = req.query;
@@ -199,7 +199,7 @@ export async function LoginFromPassword(req) {
 
   try {
     const authentication = await Authentications.findOne({
-      storeUrl: email,
+      username: email,
     }).lean();
 
     if (!authentication) {
@@ -321,6 +321,18 @@ async function GetStoreAuthToken(storeData, accessToken) {
   await AddInitialWebhooks(storeData.myshopify_domain, accessToken);
 
   logger("info", "Added store's default webhooks");
+  let username = storeData.name;
+  const isUserNameTaken = await Authentications.findOne({
+    username: username,
+  });
+  if (isUserNameTaken) {
+    const userNameCounter = username.split("_")[1];
+    if (userNameCounter) {
+      username = `${username}_${Number(userNameCounter) + 1}`;
+    } else {
+      username = `${username}_1`;
+    }
+  }
 
   const authentication = await Authentications.create({
     email: storeData.email,
@@ -330,8 +342,42 @@ async function GetStoreAuthToken(storeData, accessToken) {
     store: store._id,
     password_salt: salt,
     password_hash: hash,
+    username,
   });
 
+  // publish the message to the queue to send email
+  const eventName = "notification";
+  const variables = {
+    username,
+    password,
+  };
+  const payload = {
+    to: storeData.email,
+    templateName: "welcomeEmail",
+    templateData: variables,
+  };
+
+  RedisEventPublisher(
+    eventName,
+    { type: "email", payload },
+    (error, status) => {
+      if (error) {
+        logger("error", "Failed to publish email job to queue:", error);
+      } else {
+        logger(
+          "info",
+          `Email job published successfully with status: ${status}`,
+        );
+      }
+    },
+    (error, result) => {
+      if (error) {
+        logger("error", "Error processing email job:", error);
+      } else {
+        logger("info", "Email job processed successfully:", result);
+      }
+    },
+  );
   // eslint-disable-next-line no-underscore-dangle
   await Stores.findByIdAndUpdate(store._id, {
     // eslint-disable-next-line no-underscore-dangle

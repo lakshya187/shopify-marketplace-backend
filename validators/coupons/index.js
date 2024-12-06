@@ -41,22 +41,26 @@ export const CouponValidationSchema = Joi.object({
       "string.pattern.base": "Each bundle ID must be a valid ObjectId.",
       "any.required": "Bundle IDs are required when appliesTo is 'products'.",
     }),
-  usageLimit: Joi.number().allow(null).messages({
-    "number.base": "Usage limit must be a number.",
-    "any.allowOnly": "Usage limit can only be null or a number.",
-  }),
+  usageLimit: Joi.number().optional(),
   appliesOncePerCustomer: Joi.boolean().default(false).messages({
     "boolean.base": "Applies once per customer must be a boolean.",
   }),
-  startsAt: Joi.date().iso().required().messages({
-    "date.base": "Starts at must be a valid date.",
-    "any.required": "Starts at is required.",
-  }),
-  endsAt: Joi.date().iso().greater(Joi.ref("startsAt")).required().messages({
-    "date.base": "Ends at must be a valid date.",
-    "date.greater": "Ends at must be after Starts at.",
-    "any.required": "Ends at is required.",
-  }),
+  startsAt: Joi.alternatives()
+    .try(Joi.string().empty("").default(null), Joi.date().iso().optional())
+    .messages({
+      "date.base": "Starts at must be a valid date.",
+      "date.format": "Starts at must be in ISO format.",
+    }),
+  endsAt: Joi.alternatives()
+    .try(
+      Joi.string().empty("").default(null),
+      Joi.date().iso().greater(Joi.ref("startsAt")).optional(),
+    )
+    .messages({
+      "date.base": "Ends at must be a valid date.",
+      "date.format": "Ends at must be in ISO format.",
+      "date.greater": "Ends at must be after Starts at.",
+    }),
   isActive: Joi.boolean().default(true).messages({
     "boolean.base": "Is active must be a boolean.",
   }),
@@ -68,10 +72,12 @@ export const CouponValidationSchema = Joi.object({
       "any.only":
         "Purchase type must be either 'oneTimePurchase', 'subscription', or 'both'.",
     }),
-  minimumPurchaseAmount: Joi.number().required().messages({
-    "number.base": "Minimum purchase amount must be a number.",
-    "any.required": "Minimum purchase amount is required.",
-  }),
+  minimumPurchaseAmount: Joi.alternatives()
+    .try(Joi.string().empty("").default(null), Joi.number().positive())
+    .messages({
+      "number.base": "Minimum purchase amount must be a number.",
+      "number.positive": "Minimum purchase amount must be a positive number.",
+    }),
   maxNumberOfUse: Joi.number().optional().messages({
     "number.base": "Max number of use must be a number.",
   }),
