@@ -52,7 +52,7 @@ export const validateCreateBundle = Joi.object({
     "number.base": "Weight must be a number.",
     "number.min": "Weight cannot be less than 0.",
   }),
-  coverImage: Joi.string().uri().optional().messages({
+  coverImage: Joi.string().uri().required().messages({
     "string.base": "Cover Image must be a string.",
     "string.empty": "Cover Image is required.",
     "string.uri": "Cover Image must be a valid URL.",
@@ -62,6 +62,9 @@ export const validateCreateBundle = Joi.object({
   }),
   inventory: Joi.number(),
   trackInventory: Joi.boolean(),
+  category: Joi.string().optional(),
+  box: Joi.string().required(),
+  vendor: Joi.string().required(),
 });
 
 export const validateGenerateUrl = Joi.object({

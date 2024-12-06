@@ -1,20 +1,26 @@
 import Users from "#schemas/users.js";
 import Stores from "#schemas/stores.js";
+
 export const GetCustomerReport = async (req) => {
   try {
     const { user } = req;
     const [store] = await Stores.find({
       storeUrl: user.storeUrl,
     });
+
     if (!store) {
       return {
         status: 400,
         message: "Store not found",
       };
     }
+
+    const { page = 1 } = req.query;
+    const limit = 10;
+    const skip = (Number(page) - 1) * limit;
+
     const data = await Users.aggregate([
       {
-        // Lookup orders for each user
         $lookup: {
           from: "orders",
           localField: "_id",
@@ -69,10 +75,21 @@ export const GetCustomerReport = async (req) => {
           },
         },
       },
+      {
+        $skip: skip, // Apply skip for pagination
+      },
+      {
+        $limit: limit, // Apply limit for pagination
+      },
     ]);
+
+    const totalCount = await Users.countDocuments(); // Total number of documents
 
     return {
       data,
+      totalCount,
+      currentPage: Number(page),
+      totalPages: Math.ceil(totalCount / limit),
       status: 200,
       message: "Successfully fetched the customer report",
     };

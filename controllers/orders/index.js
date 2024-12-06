@@ -14,7 +14,9 @@ export const GetOrders = async (req) => {
         message: "Store not found",
       };
     }
-    const { skip, limit } = req.query;
+    const { page } = req.query;
+    const limit = 10;
+    const skip = (Number(page) - 1) * 10;
 
     const orders = await Orders.find({
       store: store._id,
@@ -23,8 +25,8 @@ export const GetOrders = async (req) => {
       },
     })
       .populate("user")
-      .skip(Number(skip) || 0)
-      .limit(Number(limit) || 10)
+      .skip(skip)
+      .limit(limit)
       .sort({ createdAt: -1 });
 
     return {
