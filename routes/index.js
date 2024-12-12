@@ -11,7 +11,7 @@ import StoreBoxRoutes from "./storeBoxes/index.js";
 import SupportTicketsRoutes from "./supportTickets/index.js";
 import NotificationRoutes from "./notifications/index.js";
 import CategoriesRoutes from "./categories/index.js";
-
+import ShopifyRoutes from "./shopify/index.js";
 const RouteHandler = Router();
 
 export default () => {
@@ -27,6 +27,7 @@ export default () => {
   RouteHandler.use("/support-tickets", SupportTicketsRoutes());
   RouteHandler.use("/notifications", NotificationRoutes());
   RouteHandler.use("/categories", CategoriesRoutes());
+  RouteHandler.use("/shopify", ShopifyRoutes());
 
   return RouteHandler;
 };
