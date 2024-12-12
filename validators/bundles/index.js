@@ -65,6 +65,7 @@ export const validateCreateBundle = Joi.object({
   category: Joi.string().optional(),
   box: Joi.string().required(),
   vendor: Joi.string().required(),
+  sku: Joi.string().optional(),
 });
 
 export const validateGenerateUrl = Joi.object({

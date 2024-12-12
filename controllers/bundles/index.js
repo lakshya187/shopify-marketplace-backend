@@ -30,6 +30,7 @@ export const CreateBundle = async (req) => {
       category,
       box,
       vendor,
+      sku,
     } = req.body;
     const { user } = req;
 
@@ -104,6 +105,7 @@ export const CreateBundle = async (req) => {
       category,
       box,
       vendor,
+      sku,
     });
 
     const savedBundle = await bundle.save();
