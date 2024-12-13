@@ -76,17 +76,21 @@ export const GetOrdersOverview = async (req) => {
       },
       {
         $group: {
-          _id: "$store", // Group by store
-          totalRevenue: { $sum: "$amount" },
-          totalCostOfGoods: { $sum: "$bundleDetails.costOfGoods" },
+          _id: "$store",
+          totalRevenue: {
+            $sum: {
+              $cond: [{ $ne: ["$status", "cancelled"] }, "$amount", 0],
+            },
+          },
+          // totalCostOfGoods: { $sum: "$bundleDetails.costOfGoods" },
+          total: {
+            $sum: { $cond: [{ $ne: ["$status", "cancelled"] }, 1, 0] },
+          },
+          fulfilled: {
+            $sum: { $cond: [{ $eq: ["$status", "fulfilled"] }, 1, 0] },
+          },
           pending: {
             $sum: { $cond: [{ $eq: ["$status", "pending"] }, 1, 0] },
-          },
-          delivered: {
-            $sum: { $cond: [{ $eq: ["$status", "delivered"] }, 1, 0] },
-          },
-          shipped: {
-            $sum: { $cond: [{ $eq: ["$status", "shipped"] }, 1, 0] },
           },
         },
       },
@@ -96,16 +100,13 @@ export const GetOrdersOverview = async (req) => {
           salesSummary: {
             total_revenue: { $round: ["$totalRevenue", 2] },
             net_revenue: {
-              $round: [
-                { $subtract: ["$totalRevenue", "$totalCostOfGoods"] },
-                2,
-              ],
+              $round: ["$totalRevenue", 2],
             },
           },
           orderSummary: {
+            total: "$pending",
+            fulfilled: "$fulfilled",
             pending: "$pending",
-            delivered: "$delivered",
-            shipped: "$shipped",
           },
         },
       },

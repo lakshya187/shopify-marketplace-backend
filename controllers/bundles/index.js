@@ -350,6 +350,7 @@ export const UpdateBundle = async (req) => {
       trackInventory,
       category,
       box,
+      sku,
     } = req.body;
     const { user } = req;
     const { id } = req.params;
@@ -439,6 +440,7 @@ export const UpdateBundle = async (req) => {
       description,
       category,
       box,
+      sku,
     };
     // delete the existing products of the bundle.
     await Products.deleteMany({ bundle: id });
