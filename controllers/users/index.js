@@ -151,10 +151,9 @@ export const GetUserOverview = async (req) => {
         },
       },
       {
-        // Group to calculate total users, repeat customers, and new customers
         $group: {
           _id: null,
-          total_users: { $sum: 1 },
+          lifetime_customers: { $sum: 1 },
           repeat_customers: {
             $sum: { $cond: [{ $gt: ["$orderCount", 1] }, 1, 0] },
           },
@@ -167,7 +166,7 @@ export const GetUserOverview = async (req) => {
         // Project the final result
         $project: {
           _id: 0,
-          total_users: 1,
+          lifetime_customers: 1,
           repeat_customers: 1,
           new_customers: 1,
         },

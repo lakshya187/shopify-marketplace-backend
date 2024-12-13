@@ -12,6 +12,8 @@ export const CreateSupportTicketSchema = Joi.object({
     "string.empty": "Query is required",
     "string.min": "Query must be at least 10 characters long",
   }),
+  contactNumber: Joi.string().optional(),
+  contactName: Joi.string().required(),
   priority: Joi.string()
     .valid("low", "medium", "high", "urgent")
     .default("medium")
