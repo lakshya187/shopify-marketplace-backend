@@ -6,15 +6,16 @@ const SHOPIFY_WEBHOOK_SECRET = process.env.SHOPIFY_CLIENT_SECRET;
 
 // Middleware to verify Shopify webhook signature
 export default function verifyShopifyWebhook(req, res, next) {
-    logger.info('Verifying Shopify webhook signature');
+    logger("info", "Verifying Shopify webhook signature");
     const hmac = req.get('X-Shopify-Hmac-Sha256');
     if (!hmac) {
-        logger.error('No HMAC signature');
+        logger("info", 'No HMAC signature');
         res.status(401).send('No HMAC signature');
         return;
     }
 
-    logger.info('HMAC signature found');
+    logger("info", `HMAC signature found ${hmac}`);
+    logger("info", JSON.stringify(req.body));
     const body = JSON.stringify(req.body);
     
     const computedHmac = crypto
