@@ -44,25 +44,27 @@ export const CreateBundle = async (req) => {
         message: "Store not found",
       };
     }
+    const bundleComponents = [];
     const products = await Promise.all(
       productIds
         .map(async (productObj) => {
-          const product = await GetSingleProduct({
-            accessToken: store.accessToken,
-            productId: productObj.productId,
-            shopName: store.shopName,
-          });
+          const product = await Products.findById(productObj.productId).lean();
           const isVariantValid = product.variants.find(
             (v) => v.id === productObj.variantId,
           );
 
           if (product && isVariantValid) {
-            product.selectedVariant = isVariantValid;
-            product.length = productObj.dimensions.length || "";
-            product.weight = productObj.dimensions.weight || "";
-            product.width = productObj.dimensions.width || "";
-            product.height = productObj.dimensions.height || "";
-            return product;
+            const dimensions = {
+              length: productObj.dimensions.length,
+              weight: productObj.dimensions.weight,
+              width: productObj.dimensions.width,
+              height: productObj.dimensions.height,
+            };
+            bundleComponents.push({
+              product: product._id,
+              variant: isVariantValid,
+            });
+            return Products.findByIdAndUpdate(product._id, dimensions);
           }
           return null;
         })
@@ -106,18 +108,10 @@ export const CreateBundle = async (req) => {
       box,
       vendor,
       sku,
+      components: bundleComponents,
     });
 
     const savedBundle = await bundle.save();
-
-    const bundleProducts = products.map((product) => {
-      product.productId = product.id;
-      product.bundle = bundle._id;
-      delete product.id;
-      return product;
-    });
-
-    await Products.insertMany(bundleProducts);
 
     return {
       status: 201,
@@ -171,34 +165,32 @@ export const GetBundles = async (req) => {
 export const GetSingleBundle = async (req) => {
   try {
     const { bundleId } = req.params;
-    const bundle = await Bundles.findById(bundleId);
-
+    const bundle = await Bundles.findById(bundleId)
+      .populate({
+        path: "components.product",
+      })
+      .lean();
     if (!bundle) {
       return {
         message: "Could not find the Bundle",
         status: 400,
       };
     }
-    const bundleObj = bundle.toObject();
-
-    const products = await Products.find({
-      bundle: bundle._id,
-    }).lean();
-
-    bundleObj.productIds = products.map((product) => {
+    const components = bundle.components.map((c) => {
       return {
-        productId: product.productId,
-        variantId: product.selectedVariant.id,
+        productId: c.product._id,
+        variantId: c.variant.id,
         dimensions: {
-          length: product.length,
-          width: product.width,
-          height: product.height,
-          weight: product.weight,
+          length: c.product.length,
+          width: c.product.width,
+          height: c.product.height,
+          weight: c.product.weight,
         },
       };
     });
+    bundle.productIds = components;
     return {
-      data: bundleObj,
+      data: bundle,
       status: 200,
       message: "Successfully fetched the bundle",
     };
@@ -350,6 +342,7 @@ export const UpdateBundle = async (req) => {
       trackInventory,
       category,
       box,
+      vendor: vendorName,
       sku,
     } = req.body;
     const { user } = req;
@@ -384,27 +377,30 @@ export const UpdateBundle = async (req) => {
         status: 400,
       };
     }
+    const bundleComponents = [];
 
     const products = await Promise.all(
       productIds
         .map(async (productObj) => {
-          const product = await GetSingleProduct({
-            accessToken: store.accessToken,
-            productId: productObj.productId,
-            shopName: store.shopName,
-          });
+          const product = await Products.findById(productObj.productId).lean();
+
           const isVariantValid = product.variants.find(
             (v) => v.id === productObj.variantId,
           );
+
           if (product && isVariantValid) {
-            product.selectedVariant = isVariantValid;
-            product.length = productObj.dimensions.length || "";
-            product.weight = productObj.dimensions.weight || "";
-            product.width = productObj.dimensions.width || "";
-            product.height = productObj.dimensions.height || "";
-            return product;
+            const dimensions = {
+              length: productObj.dimensions.length,
+              weight: productObj.dimensions.weight,
+              width: productObj.dimensions.width,
+              height: productObj.dimensions.height,
+            };
+            bundleComponents.push({
+              product: product._id,
+              variant: isVariantValid,
+            });
+            return Products.findByIdAndUpdate(product._id, dimensions);
           }
-          return null;
         })
         .filter(Boolean),
     );
@@ -441,24 +437,17 @@ export const UpdateBundle = async (req) => {
       category,
       box,
       sku,
+      components: bundleComponents,
+      vendor: vendorName,
     };
-    // delete the existing products of the bundle.
-    await Products.deleteMany({ bundle: id });
-
-    const bundleProducts = products.map((product) => {
-      product.productId = product.id;
-      product.bundle = id;
-      delete product.id;
-      return product;
-    });
-
-    await Products.insertMany(bundleProducts);
 
     // update the bundle on merchant, marketplace, db
     const updatedBundle = await Bundles.findByIdAndUpdate(id, bundleUpdateObj, {
       new: true,
     })
       .populate("category")
+      .populate({ path: "components.product" })
+      .populate("box")
       .lean();
 
     const inventoryDelta = updatedBundle.inventory - doesBundleExists.inventory;

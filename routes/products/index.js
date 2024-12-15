@@ -10,11 +10,10 @@ export default () => {
   ProductRoutes.get(PRODUCT_GET, AuthMiddleware, async (req, res) => {
     try {
       const data = await GetProducts(req);
-
       return SuccessResponseHandler(req, res, {
         status: data.status || 200,
         message: data.message || "Success",
-        data: data.data?.data || [],
+        data: data.data || [],
       });
     } catch (error) {
       return ErrorResponseHandler(
