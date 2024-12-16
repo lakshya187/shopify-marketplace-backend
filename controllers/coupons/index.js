@@ -50,12 +50,11 @@ export const CreateCoupon = async (req) => {
     const existingCoupon = await Coupons.findOne({ code });
     if (existingCoupon) {
       return {
-        message: "Coupon code already exists",
+        message: "A coupon with the same code already exits.",
         status: 400,
       };
     }
 
-    // Create the coupon document
     const couponObj = {
       store: store._id,
       code,
@@ -74,6 +73,8 @@ export const CreateCoupon = async (req) => {
       maxNumberOfUse,
       limitTheNumberOfUse,
     };
+
+    // finding the products based off weather the user has selected products or all as applies to.
     const bundleFilter = { isCreatedOnShopify: true };
     if (appliesTo === "all") {
       bundleFilter["store"] = store._id;
@@ -82,7 +83,6 @@ export const CreateCoupon = async (req) => {
       bundleFilter["store"] = store._id;
     }
     const bundles = await Bundles.find(bundleFilter).lean();
-
     const shopifyBundleIds = bundles.map((b) => b.shopifyProductId);
     const shopifyCouponObj = { ...couponObj };
     shopifyCouponObj.bundleIds = shopifyBundleIds;

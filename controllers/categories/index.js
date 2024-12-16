@@ -1,5 +1,6 @@
 import Categories from "#schemas/categories.js";
 
+// not validating the store since categories is a master collection
 export const GetCategories = async (req) => {
   try {
     const data = await Categories.find();

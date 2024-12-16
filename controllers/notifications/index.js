@@ -14,13 +14,15 @@ export const GetNotifications = async (req) => {
       };
     }
 
-    const { skip, limit } = req.query;
+    const { page = 1 } = req.query;
+    const limit = 10;
+    const skip = (Number(page) - 1) * limit;
 
     const notifications = await Notifications.find({
       store: store._id,
     })
-      .skip(Number(skip) || 0)
-      .limit(Number(limit) || 10)
+      .skip(skip)
+      .limit(limit)
       .sort({ createdAt: -1 });
 
     return {
@@ -30,7 +32,7 @@ export const GetNotifications = async (req) => {
     };
   } catch (e) {
     return {
-      message: e.message || e,
+      message: e,
       status: 500,
     };
   }
@@ -50,14 +52,10 @@ export const UpdateNotification = async (req) => {
     }
 
     const { id } = req.params;
-    const notification = await Notifications.findById(id);
-    if (notification.store !== store._id) {
-      return {
-        message: "This notification belongs to another store",
-        status: 400,
-      };
-    }
-
+    const [notification] = await Notifications.find({
+      _id: id,
+      store: store._id,
+    });
     if (!notification) {
       return {
         status: 404,
@@ -71,7 +69,6 @@ export const UpdateNotification = async (req) => {
       { read: true },
       { new: true },
     );
-
     return {
       data: updatedNotification,
       status: 200,
@@ -79,7 +76,7 @@ export const UpdateNotification = async (req) => {
     };
   } catch (e) {
     return {
-      message: e.message || e,
+      message: e,
       status: 500,
     };
   }

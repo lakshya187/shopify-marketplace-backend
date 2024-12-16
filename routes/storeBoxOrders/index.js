@@ -21,6 +21,7 @@ import {
 } from "#validators/storeBoxOrders/index.js";
 
 const StoreBoxOrderRoutes = Router();
+
 export default () => {
   StoreBoxOrderRoutes.post(
     GET_ALL_BOX_ORDERS,
@@ -29,7 +30,6 @@ export default () => {
     async (req, res) => {
       try {
         const data = await CreateStoreBoxOrder(req);
-
         return SuccessResponseHandler(req, res, {
           status: data.status || 200,
           message: data.message || "Success",

@@ -12,8 +12,6 @@ const ShopifyRoutes = Router();
 export default () => {
   ShopifyRoutes.post(CUSTOMER_DATA_ENSURE, async (req, res) => {
     try {
-      //   const data = await GetStoreBoxInventory(req);
-
       return SuccessResponseHandler(req, res, {
         status: 200,
         message: "Success",

@@ -76,20 +76,15 @@ export const GetCustomerReport = async (req) => {
         },
       },
       {
-        $skip: skip, // Apply skip for pagination
+        $skip: skip,
       },
       {
-        $limit: limit, // Apply limit for pagination
+        $limit: limit,
       },
     ]);
 
-    const totalCount = await Users.countDocuments(); // Total number of documents
-
     return {
       data,
-      totalCount,
-      currentPage: Number(page),
-      totalPages: Math.ceil(totalCount / limit),
       status: 200,
       message: "Successfully fetched the customer report",
     };
@@ -116,7 +111,6 @@ export const GetUserOverview = async (req) => {
 
     const [data] = await Users.aggregate([
       {
-        // Lookup orders for each user
         $lookup: {
           from: "orders",
           localField: "_id",
@@ -125,27 +119,24 @@ export const GetUserOverview = async (req) => {
         },
       },
       {
-        // Filter orders to include only those matching the specified store._id
         $addFields: {
           orders: {
             $filter: {
               input: "$orders",
               as: "order",
               cond: {
-                $eq: ["$$order.store", store._id], // Replace with actual store._id
+                $eq: ["$$order.store", store._id],
               },
             },
           },
         },
       },
       {
-        // Match users who have at least one order for the store
         $match: {
           "orders.0": { $exists: true },
         },
       },
       {
-        // Add a computed field for order count
         $addFields: {
           orderCount: { $size: "$orders" },
         },
@@ -163,7 +154,6 @@ export const GetUserOverview = async (req) => {
         },
       },
       {
-        // Project the final result
         $project: {
           _id: 0,
           lifetime_customers: 1,

@@ -37,7 +37,7 @@ export default () => {
       }
     },
   );
-
+  // only marks the notification as read
   NotificationRoutes.patch(
     UPDATE_NOTIFICATION,
     AuthMiddleware,
