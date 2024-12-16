@@ -28,7 +28,6 @@ export const CreateSupportTicket = async (req) => {
 
     const ticket = new SupportTickets(ticketObj);
     const savedTicket = await ticket.save();
-
     return {
       status: 201,
       message: "Support ticket created successfully",
@@ -37,8 +36,7 @@ export const CreateSupportTicket = async (req) => {
   } catch (error) {
     return {
       status: 500,
-      message:
-        error.message || "An error occurred while creating the support ticket",
+      message: error,
     };
   }
 };

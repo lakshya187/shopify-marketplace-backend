@@ -6,9 +6,7 @@ import logger from "#common-functions/logger/index.js";
 export const CreateStoreBoxOrder = async (req) => {
   try {
     const { orderItems } = req.body;
-
     const { user } = req;
-
     const [store] = await Stores.find({
       storeUrl: user.storeUrl,
     }).lean();

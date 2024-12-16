@@ -1,4 +1,3 @@
-import GetSingleProduct from "#common-functions/shopify/getSingleProduct.js";
 import Bundles from "#schemas/bundles.js";
 import Stores from "#schemas/stores.js";
 import Products from "#schemas/products.js";
@@ -12,16 +11,13 @@ export const CreateBundle = async (req) => {
     const {
       name,
       description,
-      productIds,
+      components,
       price,
       tags,
       discount,
       metadata,
       costOfGoods,
       isOnSale,
-      width,
-      length,
-      weight,
       images,
       coverImage,
       status,
@@ -45,10 +41,20 @@ export const CreateBundle = async (req) => {
       };
     }
     const bundleComponents = [];
+    const productIds = components.map((p) => p.productId);
+    const bundleProducts = await Products.find({
+      _id: { $in: productIds },
+    }).lean();
+    // converting the bundleProduct Array to object for better search time complexity
+    const bundleProductMap = covertArrayToMap("_id", bundleProducts);
+    // updating the product's dimensions and creating the bundle components
     const products = await Promise.all(
-      productIds
+      components
         .map(async (productObj) => {
-          const product = await Products.findById(productObj.productId).lean();
+          const product = bundleProductMap[productObj.productId];
+          if (!product) {
+            return null;
+          }
           const isVariantValid = product.variants.find(
             (v) => v.id === productObj.variantId,
           );
@@ -71,7 +77,7 @@ export const CreateBundle = async (req) => {
         .filter(Boolean),
     );
 
-    if (productIds.length !== products.length) {
+    if (components.length !== products.length) {
       return {
         message: "Not all the product ids provided are valid",
         status: 400,
@@ -95,9 +101,6 @@ export const CreateBundle = async (req) => {
       metadata: metadata || {},
       costOfGoods,
       isOnSale,
-      width,
-      length,
-      weight,
       images,
       coverImage,
       profit: Number(price) - Number(costOfGoods),
@@ -110,9 +113,7 @@ export const CreateBundle = async (req) => {
       sku,
       components: bundleComponents,
     });
-
     const savedBundle = await bundle.save();
-
     return {
       status: 201,
       message: "Successfully created the bundle",
@@ -147,7 +148,7 @@ export const GetBundles = async (req) => {
     })
       .skip(skip)
       .limit(limit)
-      .sort({ createdAt: -1 });
+      .sort({ updatedAt: -1 });
 
     return {
       data: bundles,
@@ -165,7 +166,21 @@ export const GetBundles = async (req) => {
 export const GetSingleBundle = async (req) => {
   try {
     const { bundleId } = req.params;
-    const bundle = await Bundles.findById(bundleId)
+
+    const { user } = req;
+    const [store] = await Stores.find({
+      storeUrl: user.storeUrl,
+    }).lean();
+    if (!store) {
+      return {
+        status: 400,
+        message: "Store not found",
+      };
+    }
+    const [bundle] = await Bundles.find({
+      _id: bundleId,
+      store: store._id,
+    })
       .populate({
         path: "components.product",
       })
@@ -178,7 +193,7 @@ export const GetSingleBundle = async (req) => {
     }
     const components = bundle.components.map((c) => {
       return {
-        productId: c.product._id,
+        product: c.product,
         variantId: c.variant.id,
         dimensions: {
           length: c.product.length,
@@ -188,7 +203,7 @@ export const GetSingleBundle = async (req) => {
         },
       };
     });
-    bundle.productIds = components;
+    bundle.components = components;
     return {
       data: bundle,
       status: 200,
@@ -206,24 +221,23 @@ export const DeleteSingleBundle = async (req) => {
   try {
     const { bundleId } = req.params;
     const { user } = req;
-
-    const bundle = await Bundles.findById(bundleId).lean();
+    const [store] = await Stores.find({
+      storeUrl: user.storeUrl,
+    }).lean();
+    if (!store) {
+      return {
+        status: 400,
+        message: "Store not found",
+      };
+    }
+    const [bundle] = await Bundles.find({
+      store: store._id,
+      _id: bundleId,
+    }).lean();
     if (!bundle) {
       return {
         message: "No bundle found the provided id",
         status: 400,
-      };
-    }
-
-    const [store] = await Stores.find({
-      storeUrl: user.storeUrl,
-    }).lean();
-
-    if (!bundle.store.equals(store._id)) {
-      console.log(bundle.store, store._id);
-      return {
-        status: 401,
-        message: "You are not authorized to delete this bundled",
       };
     }
     await Promise.all([
@@ -253,7 +267,12 @@ export const GenerateUploadUrl = async (req) => {
     const [store] = await Stores.find({
       storeUrl: user.storeUrl,
     }).lean();
-
+    if (!store) {
+      return {
+        status: 400,
+        message: "Store not found",
+      };
+    }
     const urls = await GenerateImageUploadUrls({
       accessToken: store.accessToken,
       shopName: store.shopName,
@@ -279,6 +298,13 @@ export const GetOverview = async (req) => {
     const [store] = await Stores.find({
       storeUrl: user.storeUrl,
     }).lean();
+
+    if (!store) {
+      return {
+        status: 400,
+        message: "Store not found",
+      };
+    }
 
     const [data] = await Bundles.aggregate([
       {
@@ -325,16 +351,12 @@ export const UpdateBundle = async (req) => {
     const {
       name,
       description,
-      productIds,
+      components,
       price,
       tags,
       discount,
-      metadata,
       costOfGoods,
       isOnSale,
-      width,
-      length,
-      weight,
       images,
       coverImage,
       status,
@@ -378,12 +400,19 @@ export const UpdateBundle = async (req) => {
       };
     }
     const bundleComponents = [];
+    const productIds = components.map((p) => p.productId);
 
+    const bundleProducts = await Products.find({
+      _id: { $in: productIds },
+    }).lean();
+    const bundleProductMap = covertArrayToMap("_id", bundleProducts);
     const products = await Promise.all(
-      productIds
+      components
         .map(async (productObj) => {
-          const product = await Products.findById(productObj.productId).lean();
-
+          const product = bundleProductMap[productObj.productId];
+          if (!product) {
+            return null;
+          }
           const isVariantValid = product.variants.find(
             (v) => v.id === productObj.variantId,
           );
@@ -411,7 +440,7 @@ export const UpdateBundle = async (req) => {
         status: 400,
       };
     }
-    if (productIds.length !== products.length) {
+    if (components.length !== products.length) {
       return {
         message: "Not all the product ids provided are valid",
         status: 400,
@@ -424,9 +453,6 @@ export const UpdateBundle = async (req) => {
       discount,
       costOfGoods,
       isOnSale,
-      width,
-      length,
-      weight,
       images,
       coverImage,
       status,
@@ -475,8 +501,6 @@ export const UpdateBundle = async (req) => {
       status: 200,
       message: "Bundle updated successfully",
     };
-
-    // const
   } catch (e) {
     return {
       message: e,
@@ -541,4 +565,13 @@ export const FetchInventoryOverview = async (req) => {
       status: 500,
     };
   }
+};
+
+//utility functions
+const covertArrayToMap = (key, arr) => {
+  const map = {};
+  arr.forEach((item) => {
+    map[item[key]] = item;
+  });
+  return map;
 };

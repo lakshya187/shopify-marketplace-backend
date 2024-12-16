@@ -43,7 +43,6 @@ export default () => {
           data: data.data,
         });
       } catch (error) {
-        logger("error", "Error when generating upload url", error);
         return ErrorResponseHandler(
           req,
           res,
@@ -62,7 +61,6 @@ export default () => {
         data: data.data,
       });
     } catch (error) {
-      logger("error", "Error when generating upload url", error);
       return ErrorResponseHandler(
         req,
         res,

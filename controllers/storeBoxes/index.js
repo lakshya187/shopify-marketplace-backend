@@ -4,9 +4,7 @@ import Stores from "#schemas/stores.js";
 export const GetStoreBoxInventory = async (req) => {
   try {
     const { user } = req;
-
     const store = await Stores.findOne({ storeUrl: user.storeUrl }).lean();
-
     if (!store) {
       return {
         status: 400,

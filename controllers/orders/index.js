@@ -82,7 +82,6 @@ export const GetOrdersOverview = async (req) => {
               $cond: [{ $ne: ["$status", "cancelled"] }, "$amount", 0],
             },
           },
-          // totalCostOfGoods: { $sum: "$bundleDetails.costOfGoods" },
           total: {
             $sum: { $cond: [{ $ne: ["$status", "cancelled"] }, 1, 0] },
           },
@@ -137,7 +136,9 @@ export const CancelOrder = async (req) => {
       };
     }
     const { id } = req.params;
-    const doesOrderExists = await Orders.findById(id).populate("store").lean();
+    const [doesOrderExists] = await Orders.find({ _id: id, store: store._id })
+      .populate("store")
+      .lean();
     if (!doesOrderExists) {
       return {
         status: 400,
