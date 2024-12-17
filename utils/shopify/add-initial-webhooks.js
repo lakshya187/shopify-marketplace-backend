@@ -10,6 +10,9 @@ const INITIAL_WEBHOOKS = [
   "orders/fulfilled",
   "orders/partially_fulfilled",
   "orders/cancelled",
+  "products/create",
+  "products/delete",
+  "products/update",
 ];
 
 const { PARTNER_EVENT_SOURCE_ARN } = process.env;
