@@ -90,6 +90,8 @@ export const CreateBundle = async (req) => {
         status: 400,
       };
     }
+    const staticImageUrl = `https://giftclub-assets.s3.ap-south-1.amazonaws.com/pack+this+gift+square-27.jpg`;
+    // images.push(staticImageUrl);
     const netPrice = Number(price) - Number(discount || 0);
     const bundle = new Bundles({
       name,
@@ -101,7 +103,7 @@ export const CreateBundle = async (req) => {
       metadata: metadata || {},
       costOfGoods,
       isOnSale,
-      images,
+      images: [...images, staticImageUrl],
       coverImage,
       profit: Number(price) - Number(costOfGoods),
       status,

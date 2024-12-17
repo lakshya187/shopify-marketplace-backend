@@ -13,6 +13,8 @@ import NotificationRoutes from "./notifications/index.js";
 import CategoriesRoutes from "./categories/index.js";
 import ShopifyRoutes from "./shopify/index.js";
 import VerifyShopifyWebhook from "../middlewares/shopify-webhook-verify.js";
+import StoreDetailsRoutes from "./storeDetails/index.js";
+import MediaRoutes from "./media/index.js";
 
 const RouteHandler = Router();
 
@@ -30,6 +32,8 @@ export default () => {
   RouteHandler.use("/notifications", NotificationRoutes());
   RouteHandler.use("/categories", CategoriesRoutes());
   RouteHandler.use("/shopify", VerifyShopifyWebhook, ShopifyRoutes());
+  RouteHandler.use("/store-details", StoreDetailsRoutes());
+  RouteHandler.use("/media", MediaRoutes());
 
   return RouteHandler;
 };

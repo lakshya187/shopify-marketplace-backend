@@ -134,33 +134,52 @@ export const UpdateStoreBoxOrder = async (req) => {
     const [storeBoxInventory] = await StoreBoxes.find({
       store: doesBoxOrderExists.store,
     }).lean();
-    if (status === "delivered")
-      if (storeBoxInventory) {
-        // todo : complete this logic of store box inventory update
-        const exitingBoxesUpdate = storeBoxInventory.inventory.map((box) => {
-          const isBoxUpdated = doesBoxOrderExists.orderItems.find(
-            (b) => b.box === box.box,
-          );
-        });
 
-        const updateObj = {};
+    if (status === "delivered") {
+      let storeBoxPromise = null;
+      if (storeBoxInventory) {
+        const newInventory = doesBoxOrderExists.orderItems.map((orderItem) => {
+          const isBoxAlreadyAvailable = storeBoxInventory.inventory.find(
+            (b) => {
+              return b.box.toString() === orderItem.box._id.toString();
+            },
+          );
+          if (isBoxAlreadyAvailable) {
+            isBoxAlreadyAvailable.quantity += orderItem.quantity;
+            isBoxAlreadyAvailable.remaining += orderItem.quantity;
+            return isBoxAlreadyAvailable;
+          } else {
+            return {
+              box: orderItem.box._id,
+              quantity: orderItem.quantity,
+              remaining: orderItem.quantity,
+              used: 0,
+            };
+          }
+        });
+        storeBoxPromise = StoreBoxes.findByIdAndUpdate(storeBoxInventory._id, {
+          inventory: newInventory,
+        });
       } else {
         const storeBoxInventory = new StoreBoxes({
           store: doesBoxOrderExists.store,
           inventory: doesBoxOrderExists.orderItems,
         });
-        const newStoreInventory = await storeBoxInventory.save();
-        logger(
-          "info",
-          "Successfully Create new inventory for the store",
-          newStoreInventory,
-        );
+        storeBoxPromise = storeBoxInventory.save();
+        logger("info", "Successfully Create new inventory for the store");
       }
-    await StoreBoxOrders.findByIdAndUpdate(doesBoxOrderExists._id, {
-      status: "delivered",
-    });
+      await Promise.all([
+        StoreBoxOrders.findByIdAndUpdate(doesBoxOrderExists._id, {
+          status: "delivered",
+        }),
+        storeBoxPromise,
+      ]);
+    }
+
     return {
       message: "successfully approved and updated the store box inventory",
+      status: 200,
+      data: null,
     };
   } catch (e) {
     return {

@@ -19,6 +19,7 @@
     "@shopify/api-codegen-preset": "^1.1.2",
     "@shopify/shopify-api": "^8.1.1",
     "amqplib": "^0.10.3",
+    "aws-sdk": "^2.1692.0",
     "aws-xray-sdk": "^3.5.3",
     "bee-queue": "^1.7.1",
     "cors": "^2.8.5",
