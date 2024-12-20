@@ -15,11 +15,11 @@ const INITIAL_WEBHOOKS = [
   "products/update",
 ];
 
-const { PARTNER_EVENT_SOURCE_ARN } = process.env;
+// const { PARTNER_EVENT_SOURCE_ARN } = process.env;
 
-if (!PARTNER_EVENT_SOURCE_ARN) {
-  logger("error", "PARTNER_EVENT_SOURCE_ARN not defined");
-}
+// if (!PARTNER_EVENT_SOURCE_ARN) {
+//   logger("error", "PARTNER_EVENT_SOURCE_ARN not defined");
+// }
 
 export default async function AddInitialWebhooks(
   storeUrl,
@@ -30,7 +30,7 @@ export default async function AddInitialWebhooks(
     logger("info", `Adding webhook for ${topic}`);
     return axios({
       method: "POST",
-      url: `https://${storeUrl}/admin/api/${eventBridgeARN}/webhooks.json`,
+      url: `https://${storeUrl}/admin/api/${process.env.SHOPIFY_API_V}/webhooks.json`,
       headers: {
         "X-Shopify-Access-Token": accessToken,
         "Content-Type": "application/json",
@@ -38,7 +38,7 @@ export default async function AddInitialWebhooks(
       data: {
         webhook: {
           topic,
-          address: PARTNER_EVENT_SOURCE_ARN,
+          address: eventBridgeARN,
           format: "json",
         },
       },
