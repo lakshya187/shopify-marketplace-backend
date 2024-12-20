@@ -21,12 +21,16 @@ if (!PARTNER_EVENT_SOURCE_ARN) {
   logger("error", "PARTNER_EVENT_SOURCE_ARN not defined");
 }
 
-export default async function AddInitialWebhooks(storeUrl, accessToken) {
+export default async function AddInitialWebhooks(
+  storeUrl,
+  accessToken,
+  eventBridgeARN,
+) {
   const promiseArray = INITIAL_WEBHOOKS.map((topic) => {
     logger("info", `Adding webhook for ${topic}`);
     return axios({
       method: "POST",
-      url: `https://${storeUrl}/admin/api/${process.env.SHOPIFY_API_V}/webhooks.json`,
+      url: `https://${storeUrl}/admin/api/${eventBridgeARN}/webhooks.json`,
       headers: {
         "X-Shopify-Access-Token": accessToken,
         "Content-Type": "application/json",

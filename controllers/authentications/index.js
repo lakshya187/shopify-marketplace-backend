@@ -138,6 +138,7 @@ export async function ShopifyAuthCallback(req) {
     const platformAuthToken = await GetStoreAuthToken(
       shopJson.shop,
       access_token,
+      appCredentials.eventBridgeARN,
     );
     // redirect to frontend with the token which will allow them to be logged in
 
@@ -285,7 +286,7 @@ export async function GetProfile(req) {
 
 // Module specific functions
 
-async function GetStoreAuthToken(storeData, accessToken) {
+async function GetStoreAuthToken(storeData, accessToken, eventBridgeARN) {
   // generate a random password and send to their email
 
   logger("info", `Received store data to save ${JSON.stringify(storeData)}`);
@@ -336,7 +337,11 @@ async function GetStoreAuthToken(storeData, accessToken) {
 
   logger("info", "Adding store's default webhooks");
 
-  await AddInitialWebhooks(storeData.myshopify_domain, accessToken);
+  await AddInitialWebhooks(
+    storeData.myshopify_domain,
+    accessToken,
+    eventBridgeARN,
+  );
 
   logger("info", "Added store's default webhooks");
   let username = storeData.name;
@@ -414,7 +419,7 @@ async function GetStoreAuthToken(storeData, accessToken) {
 }
 
 export const InitializeStore = async (req) => {
-  const { storeUrl, clientId, clientSecret } = req.body;
+  const { storeUrl, clientId, clientSecret, eventBridgeArn } = req.body;
   try {
     const { authorization } = req.headers;
     if (!authorization) {
@@ -444,6 +449,7 @@ export const InitializeStore = async (req) => {
       appCredentials: {
         clientId,
         clientSecret,
+        eventBridgeARN: eventBridgeArn,
       },
     });
     await newStore.save();

@@ -3,4 +3,5 @@ export const validateInitializeStore = Joi.object({
   storeUrl: Joi.string().required(),
   clientId: Joi.string().required(),
   clientSecret: Joi.string().required(),
+  eventBridgeArn: Joi.string().required(),
 });
