@@ -10,38 +10,46 @@ import AddInitialWebhooks from "#utils/shopify/add-initial-webhooks.js";
 import RedisEventPublisher from "#common-functions/redis/publish.js";
 
 export async function RedirectToShopifyAuth(req) {
-  const { shop } = req.query;
-  if (!shop) {
-    return { status: 400, message: "Required parameters missing" };
-  }
+  try {
+    const { shop } = req.query;
+    if (!shop) {
+      return { status: 400, message: "Required parameters missing" };
+    }
 
-  const storeExistence = await Stores.findOne({
-    storeUrl: shop,
-  }).lean();
-  if (!storeExistence) {
-    throw new Error("The store is not registered with us.");
-  }
-  const { appCredentials } = storeExistence;
+    const storeExistence = await Stores.findOne({
+      storeUrl: shop,
+    }).lean();
+    if (!storeExistence) {
+      throw new Error("The store is not registered with us.");
+    }
+    const { appCredentials } = storeExistence;
 
-  const state = Crypto.randomBytes(16).toString("hex");
-  const shopifyAuthUrl = `https://${shop}/admin/oauth/authorize?client_id=${appCredentials.clientId}&scope=${BASIC_AUTH_SCOPE}&state=${state}&redirect_uri=${process.env.SHOPIFY_API_REDIRECT_URI}`;
+    const state = Crypto.randomBytes(16).toString("hex");
+    const shopifyAuthUrl = `https://${shop}/admin/oauth/authorize?client_id=${appCredentials.clientId}&scope=${BASIC_AUTH_SCOPE}&state=${state}&redirect_uri=${process.env.SHOPIFY_API_REDIRECT_URI}`;
 
-  const authentication = await Authentications.findOne({
-    storeUrl: shop,
-  }).lean();
+    const authentication = await Authentications.findOne({
+      storeUrl: shop,
+    }).lean();
 
-  if (authentication) {
-    // Redirect to login page
+    if (authentication) {
+      // Redirect to login page
+      return {
+        redirect: true,
+        url: process.env.LOGIN_PAGE_URL,
+      };
+    }
+
     return {
       redirect: true,
-      url: process.env.LOGIN_PAGE_URL,
+      url: shopifyAuthUrl,
+    };
+  } catch (e) {
+    logger("error", `[redirect-to-shopify-auth] ${JSON.stringify(e)}`);
+    return {
+      redirect: true,
+      url: shopifyAuthUrl,
     };
   }
-
-  return {
-    redirect: true,
-    url: shopifyAuthUrl,
-  };
 }
 
 export async function ShopifyAuthCallback(req) {
