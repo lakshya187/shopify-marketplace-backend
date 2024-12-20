@@ -15,9 +15,10 @@ export async function RedirectToShopifyAuth(req) {
     return { status: 400, message: "Required parameters missing" };
   }
 
-  const { appCredentials } = await Stores.findOne({
+  const storeExistence = await Stores.findOne({
     storeUrl: shop,
   }).lean();
+  const { appCredentials } = storeExistence;
   if (!appCredentials) {
     throw new Error("The store is not registered with us.");
   }
@@ -70,7 +71,7 @@ export async function ShopifyAuthCallback(req) {
   try {
     providedHmac = Buffer.from(hmac, "utf-8");
     generatedHash = Buffer.from(
-      Crypto.createHmac("sha256", appCredentials.clientId)
+      Crypto.createHmac("sha256", appCredentials.clientSecret)
         .update(message)
         .digest("hex"),
       "utf-8",
