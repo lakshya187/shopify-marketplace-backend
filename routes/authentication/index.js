@@ -6,6 +6,7 @@ import {
   LOGIN_FROM_TOKEN,
   LOGIN_FROM_PASSWORD,
   GET_PROFILE,
+  INITIALIZE_APP,
 } from "#constants/routes/authentications/index.js";
 import { Router } from "express";
 import {
@@ -14,8 +15,11 @@ import {
   LoginFromToken,
   LoginFromPassword,
   GetProfile,
+  InitializeStore,
 } from "#controllers/authentications/index.js";
 import AuthMiddleware from "../../middlewares/authentication.js";
+import { validateInitializeStore } from "#validators/authentications/index.js";
+import ValidateMiddleware from "#validators/index.js";
 
 const AuthRoutes = Router();
 
@@ -120,6 +124,27 @@ export default () => {
       });
     }
   });
+
+  AuthRoutes.post(
+    INITIALIZE_APP,
+    ValidateMiddleware(validateInitializeStore),
+    async (req, res) => {
+      try {
+        const data = await InitializeStore(req);
+        return SuccessResponseHandler(req, res, {
+          status: data.status,
+          message: data.message,
+          data: data.result ?? null,
+        });
+      } catch (error) {
+        return ErrorResponseHandler(req, res, {
+          status: error.status || 500,
+          message: error.message || "Internal server error",
+          error,
+        });
+      }
+    },
+  );
 
   return AuthRoutes;
 };

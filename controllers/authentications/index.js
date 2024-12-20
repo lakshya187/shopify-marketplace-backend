@@ -14,8 +14,15 @@ export async function RedirectToShopifyAuth(req) {
   if (!shop) {
     return { status: 400, message: "Required parameters missing" };
   }
+
+  const { appCredentials } = await Stores.findOne({
+    storeUrl: shop,
+  }).lean();
+  if (!appCredentials) {
+    throw new Error("The store is not registered with us.");
+  }
   const state = Crypto.randomBytes(16).toString("hex");
-  const shopifyAuthUrl = `https://${shop}/admin/oauth/authorize?client_id=${process.env.SHOPIFY_CLIENT_ID}&scope=${BASIC_AUTH_SCOPE}&state=${state}&redirect_uri=${process.env.SHOPIFY_API_REDIRECT_URI}`;
+  const shopifyAuthUrl = `https://${shop}/admin/oauth/authorize?client_id=${appCredentials.clientId}&scope=${BASIC_AUTH_SCOPE}&state=${state}&redirect_uri=${process.env.SHOPIFY_API_REDIRECT_URI}`;
 
   const authentication = await Authentications.findOne({
     storeUrl: shop,
@@ -43,6 +50,13 @@ export async function ShopifyAuthCallback(req) {
     return { status: 400, message: "Required parameters missing" };
   }
 
+  const storeExistence = await Stores.findOne({
+    storeUrl: shop,
+  }).lean();
+  if (!storeExistence) {
+    throw new Error("The store is not registered with us.");
+  }
+  const { appCredentials } = storeExistence;
   const map = { ...req.query };
 
   delete map.signature;
@@ -56,7 +70,7 @@ export async function ShopifyAuthCallback(req) {
   try {
     providedHmac = Buffer.from(hmac, "utf-8");
     generatedHash = Buffer.from(
-      Crypto.createHmac("sha256", process.env.SHOPIFY_CLIENT_SECRET)
+      Crypto.createHmac("sha256", appCredentials.clientId)
         .update(message)
         .digest("hex"),
       "utf-8",
@@ -79,13 +93,13 @@ export async function ShopifyAuthCallback(req) {
     return { status: 400, message: "HMAC validation failed" };
   }
 
-  const accessTokenRequestUrl = `https://${shop}/admin/oauth/access_token?client_id=${process.env.SHOPIFY_CLIENT_ID}&client_secret=${process.env.SHOPIFY_CLIENT_SECRET}&code=${code}`;
+  const accessTokenRequestUrl = `https://${shop}/admin/oauth/access_token?client_id=${appCredentials.clientId}&client_secret=${appCredentials.clientSecret}&code=${code}`;
 
-  const storeExistence = await Authentications.findOne({
+  const authExistence = await Authentications.findOne({
     storeUrl: shop,
   }).lean();
 
-  if (storeExistence) {
+  if (authExistence) {
     // update store and return to login page
     return {
       redirect: true,
@@ -275,31 +289,34 @@ async function GetStoreAuthToken(storeData, accessToken) {
 
   logger("info", `Received store data to save ${JSON.stringify(storeData)}`);
 
-  const store = await Stores.create({
-    accessToken,
-    storeUrl: storeData.myshopify_domain,
-    storeId: storeData.id,
-    primaryEmail: storeData.email,
-    shopName: storeData.name,
-    shopOwner: storeData.shop_owner,
-    referrerAgency: storeData.source,
-    address1: storeData.address1,
-    address2: storeData.address2,
-    zip: storeData.zip,
-    city: storeData.city,
-    checkoutApiSupported: storeData.checkout_api_supported,
-    multiLocationEnabled: storeData.multi_location_enabled,
-    myShopifyDomain: storeData.myshopify_domain,
-    shopifyPlanName: storeData.plan_name,
-    storeCustomerEmail: storeData.customer_email,
-    storeEstablishedAt: storeData.created_at,
-    storePrimaryLocale: storeData.primary_locale,
-    phoneNumber: storeData.phone,
-    countryCode: storeData.country_code,
-    provinceCode: storeData.province_code,
-    domain: storeData.domain,
-    isInternalStore: INTERNAL_STORES.includes(storeData.myshopify_domain),
-  });
+  const store = await Stores.findOneAndUpdate(
+    { storeUrl: storeData.myshopify_domain },
+    {
+      accessToken,
+      storeUrl: storeData.myshopify_domain,
+      storeId: storeData.id,
+      primaryEmail: storeData.email,
+      shopName: storeData.name,
+      shopOwner: storeData.shop_owner,
+      referrerAgency: storeData.source,
+      address1: storeData.address1,
+      address2: storeData.address2,
+      zip: storeData.zip,
+      city: storeData.city,
+      checkoutApiSupported: storeData.checkout_api_supported,
+      multiLocationEnabled: storeData.multi_location_enabled,
+      myShopifyDomain: storeData.myshopify_domain,
+      shopifyPlanName: storeData.plan_name,
+      storeCustomerEmail: storeData.customer_email,
+      storeEstablishedAt: storeData.created_at,
+      storePrimaryLocale: storeData.primary_locale,
+      phoneNumber: storeData.phone,
+      countryCode: storeData.country_code,
+      provinceCode: storeData.province_code,
+      domain: storeData.domain,
+      isInternalStore: INTERNAL_STORES.includes(storeData.myshopify_domain),
+    },
+  );
 
   const password = PasswordGenerator.generate({
     length: 10,
@@ -394,6 +411,54 @@ async function GetStoreAuthToken(storeData, accessToken) {
 
   return token;
 }
+
+export const InitializeStore = async (req) => {
+  const { storeUrl, clientId, clientSecret } = req.body;
+  try {
+    const { authorization } = req.headers;
+    if (!authorization) {
+      return {
+        message: "You are not authorized to perform this action",
+        status: 401,
+      };
+    }
+    const { CUSTOM_APP_AUTH } = process.env;
+    if (authorization !== CUSTOM_APP_AUTH) {
+      return {
+        message: "You are not authorized to perform this action",
+        status: 401,
+      };
+    }
+
+    const doesStoreExists = await Stores.findOne({ storeUrl }).lean();
+    if (doesStoreExists) {
+      return {
+        message: "Cannot initialize this store since it already exits",
+        status: 400,
+      };
+    }
+
+    const newStore = new Stores({
+      storeUrl,
+      appCredentials: {
+        clientId,
+        clientSecret,
+      },
+    });
+    await newStore.save();
+
+    return {
+      message: "Successfully initialized the store.",
+      status: 200,
+    };
+  } catch (e) {
+    logger("error", "[update-store-credentials]", e);
+    return {
+      message: e,
+      status: 500,
+    };
+  }
+};
 
 // /////////////////////////
 
