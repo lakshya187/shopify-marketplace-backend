@@ -38,7 +38,6 @@ export default () => {
         data,
       });
     } catch (error) {
-      console.log(error);
       return ErrorResponseHandler(
         req,
         res,

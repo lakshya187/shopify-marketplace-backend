@@ -18,10 +18,11 @@ export async function RedirectToShopifyAuth(req) {
   const storeExistence = await Stores.findOne({
     storeUrl: shop,
   }).lean();
-  const { appCredentials } = storeExistence;
-  if (!appCredentials) {
+  if (!storeExistence) {
     throw new Error("The store is not registered with us.");
   }
+  const { appCredentials } = storeExistence;
+
   const state = Crypto.randomBytes(16).toString("hex");
   const shopifyAuthUrl = `https://${shop}/admin/oauth/authorize?client_id=${appCredentials.clientId}&scope=${BASIC_AUTH_SCOPE}&state=${state}&redirect_uri=${process.env.SHOPIFY_API_REDIRECT_URI}`;
 
@@ -90,7 +91,7 @@ export async function ShopifyAuthCallback(req) {
   }
 
   if (!hashEquals) {
-    logger("info", "ShopifyCallback.HMAC.Failed");
+    logger("info", "[shopify-auth-callback] ShopifyCallback.HMAC.Failed");
     return { status: 400, message: "HMAC validation failed" };
   }
 
@@ -147,8 +148,13 @@ export async function ShopifyAuthCallback(req) {
       url: `${process.env.LOGIN_PAGE_URL}?verify=${platformAuthToken}`,
     };
   } catch (e) {
-    console.log(e);
-    logger("error", "ShopifyCallback.AccessToken.Error", e);
+    logger(
+      "error",
+      `[shopify-auth-callback] ShopifyCallback.AccessToken.Error ${JSON.stringify(
+        e,
+      )}`,
+      e,
+    );
     return { status: 400, message: "Error during authentication" };
   }
 }
@@ -201,7 +207,7 @@ export async function LoginFromToken(req) {
       },
     };
   } catch (e) {
-    logger("error", "LoginFromToken.Error", e);
+    logger("error", `[login-from-token] ${JSON.stringify(e)}`);
     return { status: 400, message: "Invalid token" };
   }
 }
@@ -261,7 +267,7 @@ export async function LoginFromPassword(req) {
       },
     };
   } catch (e) {
-    logger("error", "LoginFromPassword.Error", e);
+    logger("error", `[login-from-password] ${JSON.stringify(e)} `, e);
     return { status: 400, message: "Invalid credentials" };
   }
 }
@@ -336,13 +342,21 @@ async function GetStoreAuthToken(storeData, accessToken, eventBridgeARN) {
   );
 
   logger("info", "Adding store's default webhooks");
-
-  await AddInitialWebhooks(
-    storeData.myshopify_domain,
-    accessToken,
-    eventBridgeARN,
-  );
-
+  try {
+    await AddInitialWebhooks(
+      storeData.myshopify_domain,
+      accessToken,
+      eventBridgeARN,
+    );
+  } catch (e) {
+    if (e?.response?.data) {
+      logger("info", `[Error webhook] ${JSON.stringify(e.response.data)}`);
+    }
+    logger(
+      "error",
+      `[add-store-webhook] Error adding webhooks ${JSON.stringify(e)}`,
+    );
+  }
   logger("info", "Added store's default webhooks");
   let username = storeData.name;
   const isUserNameTaken = await Authentications.findOne({
@@ -395,7 +409,11 @@ async function GetStoreAuthToken(storeData, accessToken, eventBridgeARN) {
     },
     (error, result) => {
       if (error) {
-        logger("error", "Error processing email job:", error);
+        logger(
+          "error",
+          "[get-store-auth-token]Error processing email job:",
+          error,
+        );
       } else {
         logger("info", "Email job processed successfully:", result);
       }
@@ -459,7 +477,7 @@ export const InitializeStore = async (req) => {
       status: 200,
     };
   } catch (e) {
-    logger("error", "[update-store-credentials]", e);
+    logger("error", "[initialize-store]", e);
     return {
       message: e,
       status: 500,
