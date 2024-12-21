@@ -156,6 +156,7 @@ export const CancelOrder = async (req) => {
         restock: true,
         shopName: doesOrderExists.store.shopName,
         staffNote: "",
+        storeUrl: doesOrderExists.store.storeUrl,
       }),
     ]);
 

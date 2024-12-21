@@ -248,6 +248,7 @@ export const DeleteSingleBundle = async (req) => {
         accessToken: store.accessToken,
         shopName: store.shopName,
         productId: bundle.shopifyProductId,
+        storeUrl: store.storeUrl,
       }),
     ]);
     return {
@@ -279,6 +280,7 @@ export const GenerateUploadUrl = async (req) => {
       accessToken: store.accessToken,
       shopName: store.shopName,
       files: [{ filename, mimeType, fileSize }],
+      storeUrl: store.storeUrl,
     });
 
     return {
@@ -486,6 +488,7 @@ export const UpdateBundle = async (req) => {
       products: products,
       productId: doesBundleExists.shopifyProductId,
       inventoryDelta,
+      storeUrl: internalStore.storeUrl,
     });
     let vendor;
     if (doesBundleExists.metadata?.vendorShopifyId) {
@@ -496,6 +499,7 @@ export const UpdateBundle = async (req) => {
         productId: doesBundleExists.metadata.vendorShopifyId,
         products: products,
         inventoryDelta,
+        storeUrl: store.storeUrl,
       });
     }
     await Promise.all([marketPlace, vendor]);

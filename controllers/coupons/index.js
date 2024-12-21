@@ -92,6 +92,7 @@ export const CreateCoupon = async (req) => {
       accessToken: internalStore.accessToken,
       coupon: shopifyCouponObj,
       shopName: internalStore.shopName,
+      storeUrl: internalStore.storeUrl,
     });
     if (shopifyCoupon.id) {
       couponObj["shopifyId"] = shopifyCoupon.id;
