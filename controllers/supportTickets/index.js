@@ -2,7 +2,8 @@ import Stores from "#schemas/stores.js";
 import SupportTickets from "#schemas/supportTickets.js";
 export const CreateSupportTicket = async (req) => {
   try {
-    const { subject, query, priority, contactNumber, contactName } = req.body;
+    const { subject, query, priority, contactNumber, contactName, attachment } =
+      req.body;
     const { user } = req;
 
     const [store] = await Stores.find({
@@ -24,6 +25,7 @@ export const CreateSupportTicket = async (req) => {
       status: "open",
       contactNumber,
       contactName,
+      attachment,
     };
 
     const ticket = new SupportTickets(ticketObj);
