@@ -337,6 +337,7 @@ export const GetOverview = async (req) => {
         },
       },
     ]);
+    data.total_bundles_value = `₹${data.total_bundles_value}`;
     return {
       data,
       status: 200,

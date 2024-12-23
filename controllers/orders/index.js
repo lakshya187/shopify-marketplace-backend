@@ -103,13 +103,16 @@ export const GetOrdersOverview = async (req) => {
             },
           },
           orderSummary: {
-            total: "$pending",
+            total: "$total",
             fulfilled: "$fulfilled",
             pending: "$pending",
           },
         },
       },
     ]);
+    data.salesSummary.total_revenue = `₹${data.salesSummary.total_revenue}`;
+    data.salesSummary.net_revenue = `₹${data.salesSummary.net_revenue}`;
+
     return {
       data,
       status: 200,
