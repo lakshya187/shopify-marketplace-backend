@@ -366,7 +366,7 @@ async function GetStoreAuthToken(storeData, accessToken, eventBridgeARN) {
     );
   }
   logger("info", "Added store's default webhooks");
-  let username = storeData.name;
+  let username = storeData.name.toLowerCase();
   const isUserNameTaken = await Authentications.findOne({
     username: username,
   });
