@@ -110,8 +110,10 @@ export const GetOrdersOverview = async (req) => {
         },
       },
     ]);
-    data.salesSummary.total_revenue = `₹${data.salesSummary?.total_revenue}`;
-    data.salesSummary.net_revenue = `₹${data.salesSummary?.net_revenue}`;
+    if (data) {
+      data.salesSummary.total_revenue = `₹${data.salesSummary?.total_revenue}`;
+      data.salesSummary.net_revenue = `₹${data.salesSummary?.net_revenue}`;
+    }
 
     return {
       data,
