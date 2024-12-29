@@ -1,17 +1,8 @@
 import Joi from "joi";
 
 export const CreateSupportTicketSchema = Joi.object({
-  subject: Joi.string().required().max(255).messages({
-    "string.base": "Subject must be a string",
-    "string.empty": "Subject is required",
-    "string.min": "Subject must be at least 5 characters long",
-    "string.max": "Subject must not exceed 255 characters",
-  }),
-  query: Joi.string().required().messages({
-    "string.base": "Query must be a string",
-    "string.empty": "Query is required",
-    "string.min": "Query must be at least 10 characters long",
-  }),
+  subject: Joi.string().optional(),
+  query: Joi.string().optional(),
   contactNumber: Joi.string().optional(),
   contactName: Joi.string().required(),
   priority: Joi.string()
