@@ -13,7 +13,7 @@ const PORT = process.env.APPLICATION_PORT || 8080;
 dotenv.config();
 
 // AWS XRAY Setup
-if (process.env.NODE_ENV === "production") {
+if (process.env.NODE_ENV === "production" && process.env.AWS_XRAY_APP_SEGMENT_NAME) {
   application.use(
     AWSXRay.express.openSegment(process.env.AWS_XRAY_APP_SEGMENT_NAME),
   );
