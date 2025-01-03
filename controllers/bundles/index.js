@@ -8,7 +8,7 @@ import {
   DELETE_PRODUCT,
   GET_PRODUCT_DETAILS,
   GET_PRODUCT_MEDIA,
-  GET_PRODUCT_VARIANT_INVENTORY,
+  GET_PRODUCT_VARIANTS_INVENTORY,
   GET_STORE_LOCATION,
   INVENTORY_ADJUST_QUANTITIES,
   PRODUCT_DELETE_MEDIA,
@@ -802,24 +802,30 @@ const updateProduct = async ({
   } else {
     inventoryPolicy = "CONTINUE";
   }
-  const defaultVariant = product.variants.edges[0].node;
+
+  const variantIds = [];
+  const variants = product.variants.edges.map(({ node }) => {
+    const isPackaging = node.title === "With Packaging";
+    variantIds.push(node.id);
+    return {
+      id: node.id,
+      price: isPackaging
+        ? bundle.price + (bundle.box?.price ?? 0)
+        : bundle.price,
+      inventoryItem: {
+        tracked: bundle.trackInventory,
+        sku: isPackaging ? `${bundle.sku}_P` : bundle.sku,
+      },
+      inventoryPolicy,
+    };
+  });
   try {
     await executeShopifyQueries({
       accessToken,
       storeUrl,
       variables: {
         productId,
-        variants: [
-          {
-            id: defaultVariant.id,
-            price: bundle.price,
-            inventoryItem: {
-              tracked: bundle.trackInventory,
-              ...skuObj,
-            },
-            inventoryPolicy,
-          },
-        ],
+        variants,
       },
       query: PRODUCT_VARIANT_BULK_UPDATE,
       callback: null,
@@ -827,22 +833,6 @@ const updateProduct = async ({
     logger("info", "Successfully Updated the product variant");
   } catch (e) {
     logger("error", "[update-product] Could not update the product variant");
-  }
-  let defaultVariantInventoryId;
-  try {
-    defaultVariantInventoryId = await executeShopifyQueries({
-      accessToken,
-      storeUrl,
-      variables: {
-        variantId: defaultVariant.id,
-      },
-      query: GET_PRODUCT_VARIANT_INVENTORY,
-      callback: (result) => {
-        return result.data.productVariant.inventoryItem;
-      },
-    });
-  } catch (e) {
-    logger("error", "[update-product] Could not fetch the product variant", e);
   }
   let locations;
   let location;
@@ -865,6 +855,29 @@ const updateProduct = async ({
   } else {
     location = defaultLocation.node.id;
   }
+  let inventoryIds;
+  try {
+    inventoryIds = await executeShopifyQueries({
+      accessToken,
+      storeUrl,
+      variables: {
+        variantIds: variantIds,
+      },
+      query: GET_PRODUCT_VARIANTS_INVENTORY,
+      callback: (result) => {
+        return result?.data?.nodes.map((obj) => {
+          return {
+            delta: inventoryDelta,
+            inventoryItemId: obj.inventoryItem.id,
+            locationId: location,
+          };
+        });
+      },
+    });
+  } catch (e) {
+    logger("error", "[update-product] Could not fetch the product variant", e);
+  }
+
   try {
     await executeShopifyQueries({
       accessToken,
@@ -873,13 +886,7 @@ const updateProduct = async ({
         input: {
           reason: "correction",
           name: "available",
-          changes: [
-            {
-              delta: inventoryDelta,
-              inventoryItemId: defaultVariantInventoryId.id,
-              locationId: location,
-            },
-          ],
+          changes: inventoryIds,
         },
       },
       query: INVENTORY_ADJUST_QUANTITIES,
