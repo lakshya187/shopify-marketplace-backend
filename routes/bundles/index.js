@@ -11,6 +11,7 @@ import {
   GET_OVERVIEW,
   UPDATE_BUNDLE,
   GET_BUNDLE_INVENTORY_OVERVIEW,
+  AI_SEARCH,
 } from "../../constants/routes/bundles/index.js";
 import {
   CreateBundle,
@@ -21,6 +22,7 @@ import {
   GetOverview,
   UpdateBundle,
   FetchInventoryOverview,
+  AISearch,
 } from "../../controllers/bundles/index.js";
 import AuthMiddleware from "../../middlewares/authentication.js";
 import ValidateMiddleware from "../../validators/index.js";
@@ -65,6 +67,25 @@ export default () => {
         req,
         res,
         error.message || "Internal server error",
+      );
+    }
+  });
+
+  BundleRoutes.get(AI_SEARCH, async (req, res) => {
+    try {
+      const data = await AISearch(req);
+      return SuccessResponseHandler(req, res, {
+        status: data.status || 200,
+        message: data.message || "Success",
+        data: data.data || [],
+      });
+    } catch (e) {
+      return ErrorResponseHandler(
+        req,
+        res,
+        error.status || 500,
+        error.message || "Internal server error",
+        error,
       );
     }
   });

@@ -1,4 +1,5 @@
-import CreateDiscountCode from "#common-functions/shopify/createDiscountCoupon.js";
+import executeShopifyQueries from "#common-functions/shopify/execute.js";
+import { CREATE_COUPON } from "#common-functions/shopify/queries.js";
 import Bundles from "#schemas/bundles.js";
 import Coupons from "#schemas/coupons.js";
 import Stores from "#schemas/stores.js";
@@ -84,16 +85,88 @@ export const CreateCoupon = async (req) => {
     }
     const bundles = await Bundles.find(bundleFilter).lean();
     const shopifyBundleIds = bundles.map((b) => b.shopifyProductId);
-    const shopifyCouponObj = { ...couponObj };
-    shopifyCouponObj.bundleIds = shopifyBundleIds;
+    couponObj.bundleIds = shopifyBundleIds;
 
+    const dateRange = {};
+    const customerGets = {
+      value: {},
+    };
+    const minimumPurchaseAmountObj = {};
+    if (couponObj.startsAt) {
+      dateRange["startsAt"] = couponObj.startsAt;
+    }
+    if (couponObj.endsAt) {
+      dateRange["endsAt"] = couponObj.endsAt;
+    }
+
+    if (couponObj.discountType === "percentage") {
+      customerGets.value["percentage"] = Number(couponObj.discountValue) / 100;
+    } else if (couponObj.discountType === "fixed_amount") {
+      customerGets.value["discountAmount"] = {
+        amount: Number(couponObj.discountValue),
+        appliesOnEachItem: true,
+      };
+    }
+    if (couponObj.minimumPurchaseAmount) {
+      minimumPurchaseAmountObj["minimumRequirement"] = {
+        subtotal: {
+          greaterThanOrEqualToSubtotal: Number(couponObj.minimumPurchaseAmount),
+        },
+      };
+    }
+    const appliesToObj = {
+      items: {
+        products: {
+          productsToAdd: couponObj.bundleIds,
+        },
+      },
+    };
     // save the coupon in shopify
-    const shopifyCoupon = await CreateDiscountCode({
+    const couponVariables = {
+      basicCodeDiscount: {
+        title: couponObj.title,
+        code: couponObj.code,
+        ...dateRange,
+        customerSelection: {
+          all: true,
+        },
+        customerGets: {
+          ...customerGets,
+          ...appliesToObj,
+        },
+        appliesOncePerCustomer: couponObj.appliesOncePerCustomer,
+        usageLimit: Number(couponObj.usageLimit),
+        ...minimumPurchaseAmountObj,
+      },
+    };
+
+    const shopifyCoupon = await executeShopifyQueries({
       accessToken: internalStore.accessToken,
-      coupon: shopifyCouponObj,
-      shopName: internalStore.shopName,
       storeUrl: internalStore.storeUrl,
+      variables: couponVariables,
+      query: CREATE_COUPON,
+      callback: (result) => {
+        const discountCodeNode =
+          result.data.discountCodeBasicCreate.codeDiscountNode;
+
+        const formattedResponse = {
+          id: discountCodeNode.id,
+          title: discountCodeNode.codeDiscount.title,
+          code: discountCodeNode.codeDiscount.codes.nodes.map(
+            (node) => node.code,
+          ),
+          startsAt: discountCodeNode.codeDiscount.startsAt,
+          endsAt: discountCodeNode.codeDiscount.endsAt,
+          appliesOncePerCustomer:
+            discountCodeNode.codeDiscount.appliesOncePerCustomer,
+          discountValue:
+            discountCodeNode.codeDiscount.customerGets.value.percentage,
+          appliesTo: discountCodeNode.codeDiscount.customerGets,
+        };
+        return formattedResponse;
+      },
     });
+
     if (shopifyCoupon.id) {
       couponObj["shopifyId"] = shopifyCoupon.id;
       if (couponObj.appliesTo === "all") {
