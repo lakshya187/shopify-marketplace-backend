@@ -15,6 +15,7 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
+    "@google-cloud/bigquery": "^7.9.1",
     "@sentry/node": "^7.86.0",
     "@shopify/api-codegen-preset": "^1.1.2",
     "@shopify/shopify-api": "^8.1.1",

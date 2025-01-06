@@ -6,3 +6,4 @@ export const GENERATE_UPLOAD_URL = "/generate-upload-url";
 export const GET_OVERVIEW = "/overview";
 export const UPDATE_BUNDLE = "/:id";
 export const GET_BUNDLE_INVENTORY_OVERVIEW = "/inventory-overview";
+export const AI_SEARCH = "/ai-search";

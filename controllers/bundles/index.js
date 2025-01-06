@@ -1,11 +1,23 @@
 import Bundles from "#schemas/bundles.js";
 import Stores from "#schemas/stores.js";
 import Products from "#schemas/products.js";
-import GenerateImageUploadUrls from "#common-functions/shopify/generateUploadUrl.js";
-import DeleteProduct from "#common-functions/shopify/deleteProduct.js";
-import UpdateProduct from "#common-functions/shopify/updateProduct.js";
 import Categories from "#schemas/categories.js";
-
+import GoogleBigQuery from "#common-functions/big-query/index.js";
+import executeShopifyQueries from "#common-functions/shopify/execute.js";
+import {
+  DELETE_PRODUCT,
+  GET_PRODUCT_DETAILS,
+  GET_PRODUCT_MEDIA,
+  GET_PRODUCT_VARIANTS_INVENTORY,
+  GET_STORE_LOCATION,
+  INVENTORY_ADJUST_QUANTITIES,
+  PRODUCT_DELETE_MEDIA,
+  PRODUCT_VARIANT_BULK_UPDATE,
+  STAGED_UPLOADS_CREATE,
+  UPDATE_PRODUCT_WITH_NEW_MEDIA,
+} from "#common-functions/shopify/queries.js";
+import logger from "#common-functions/logger/index.js";
+const bigQueryClient = new GoogleBigQuery(process.env.GCP_PROJECT_ID);
 export const CreateBundle = async (req) => {
   try {
     const {
@@ -244,11 +256,15 @@ export const DeleteSingleBundle = async (req) => {
     }
     await Promise.all([
       Bundles.findByIdAndDelete(bundleId),
-      DeleteProduct({
+
+      executeShopifyQueries({
+        query: DELETE_PRODUCT,
         accessToken: store.accessToken,
-        shopName: store.shopName,
-        productId: bundle.shopifyProductId,
+        callback: null,
         storeUrl: store.storeUrl,
+        variables: {
+          productId: bundle.shopifyProductId,
+        },
       }),
     ]);
     return {
@@ -276,15 +292,36 @@ export const GenerateUploadUrl = async (req) => {
         message: "Store not found",
       };
     }
-    const urls = await GenerateImageUploadUrls({
-      accessToken: store.accessToken,
-      shopName: store.shopName,
-      files: [{ filename, mimeType, fileSize }],
-      storeUrl: store.storeUrl,
-    });
+    let url;
+    try {
+      url = await executeShopifyQueries({
+        query: STAGED_UPLOADS_CREATE,
+        accessToken: store.accessToken,
+        callback: (result) => {
+          const { stagedUploadsCreate } = result.data;
+          const urlObj = stagedUploadsCreate.stagedTargets[0];
+          return urlObj;
+        },
+        storeUrl: store.storeUrl,
+        variables: {
+          input: [
+            {
+              filename,
+              mimeType,
+              fileSize,
+              httpMethod: "PUT",
+              resource: "FILE",
+            },
+          ],
+        },
+      });
+    } catch (e) {
+      logger("error", `[generate-upload-url]`, e);
+      throw new Error(JSON.stringify(e));
+    }
 
     return {
-      data: urls,
+      data: url,
       status: 200,
       message: "Successfully generated image upload URLs",
     };
@@ -484,7 +521,7 @@ export const UpdateBundle = async (req) => {
       .lean();
 
     const inventoryDelta = updatedBundle.inventory - doesBundleExists.inventory;
-    const marketPlace = UpdateProduct({
+    const marketPlace = updateProduct({
       accessToken: internalStore.accessToken,
       shopName: internalStore.shopName,
       bundle: updatedBundle,
@@ -495,7 +532,7 @@ export const UpdateBundle = async (req) => {
     });
     let vendor;
     if (doesBundleExists.metadata?.vendorShopifyId) {
-      vendor = UpdateProduct({
+      vendor = updateProduct({
         accessToken: store.accessToken,
         shopName: store.shopName,
         bundle: updatedBundle,
@@ -576,6 +613,37 @@ export const FetchInventoryOverview = async (req) => {
   }
 };
 
+export const AISearch = async (req) => {
+  try {
+    const { query } = req;
+    const searchQuery = `
+        SELECT DISTINCT base.content , base.id
+          FROM VECTOR_SEARCH(
+            TABLE ${"`"}giftclub-ai-445306.products_dev.product_embeddings${"`"},
+            'embeddings',
+            (
+                SELECT  ml_generate_embedding_result
+                FROM ML.GENERATE_EMBEDDING(
+                MODEL ${"`"}giftclub-ai-445306.products_dev.textembedding_gecko${"`"},
+                (SELECT '${query.query}' AS content))
+            ),
+          top_k => 15, options => '{"fraction_lists_to_search": 1}'
+        )
+        `;
+    const aiResult = await bigQueryClient.executeQuery(searchQuery);
+    const productIds = aiResult.map((r) => r.id);
+    const products = await Products.find({ _id: { $in: productIds } });
+
+    return {
+      data: products,
+      message: "Successfully ran the AI search",
+      status: 200,
+    };
+  } catch (e) {
+    return { status: 500, message: e };
+  }
+};
+
 //utility functions
 const covertArrayToMap = (key, arr) => {
   const map = {};
@@ -583,4 +651,252 @@ const covertArrayToMap = (key, arr) => {
     map[item[key]] = item;
   });
   return map;
+};
+
+const updateProduct = async ({
+  bundle,
+  accessToken,
+  storeUrl,
+  productId,
+  inventoryDelta,
+}) => {
+  let mediaIds;
+  try {
+    mediaIds = await executeShopifyQueries({
+      accessToken,
+      callback: (result) => {
+        return result.data.product.media.edges.map((edge) => edge.node.id);
+      },
+      query: GET_PRODUCT_MEDIA,
+      storeUrl,
+      variables: {
+        productId,
+      },
+    });
+    logger("info", "Successfully fetched the product media");
+  } catch (e) {
+    logger("error", "[update-product] Could not find the product media", e);
+  }
+  try {
+    await executeShopifyQueries({
+      query: PRODUCT_DELETE_MEDIA,
+      accessToken,
+      storeUrl,
+      variables: {
+        mediaIds,
+        productId,
+      },
+      callback: null,
+    });
+    logger("info", "Successfully deleted the product media");
+  } catch (e) {
+    logger("error", "[update-product] Could not delete the product media", e);
+  }
+  let productDetails;
+  try {
+    productDetails = await executeShopifyQueries({
+      accessToken,
+      query: GET_PRODUCT_DETAILS,
+      callback: (result) => {
+        const product = result?.data?.product;
+        return {
+          metafields: product.metafields.edges.map(({ node }) => {
+            return {
+              id: node.id,
+              namespace: node.namespace,
+              key: node.key,
+              value: node.value,
+              description: node.value,
+            };
+          }),
+        };
+      },
+      storeUrl,
+      variables: {
+        id: productId,
+      },
+    });
+  } catch (e) {
+    logger("error", "[update-product] Could not fetch the product details", e);
+  }
+  const componentField = productDetails.metafields.find((field) => {
+    return field.key === "bundle_components";
+  });
+  const box = {};
+  if (bundle.box) {
+    box["price"] = bundle.box.price;
+    box["size"] = bundle.box.sizes.size;
+  }
+  let upsertComponentObj = {};
+  if (componentField) {
+    upsertComponentObj["id"] = componentField.id;
+    upsertComponentObj["value"] = JSON.stringify({
+      products: bundle.components,
+      box,
+    });
+  } else {
+    upsertComponentObj["namespace"] = "custom";
+    upsertComponentObj["key"] = "bundle_components";
+    upsertComponentObj["value"] = JSON.stringify({
+      products: bundle.components,
+      box,
+    });
+    upsertComponentObj["type"] = "json_string";
+  }
+
+  const media = [];
+  if (bundle.coverImage) {
+    media.push({
+      mediaContentType: "IMAGE",
+      originalSource: bundle.coverImage,
+      alt: `Cover image for ${bundle.name}`,
+    });
+  }
+  if (bundle.images && bundle.images.length > 0) {
+    bundle.images.forEach((imageUrl, index) => {
+      media.push({
+        mediaContentType: "IMAGE",
+        originalSource: imageUrl,
+        alt: `Additional image ${index + 1} for ${bundle.name}`,
+      });
+    });
+  }
+  const category = {};
+  if (bundle?.category?.category?.id) {
+    category["category"] = bundle.category.category.id;
+  }
+  let product;
+  try {
+    product = await executeShopifyQueries({
+      accessToken,
+      query: UPDATE_PRODUCT_WITH_NEW_MEDIA,
+      storeUrl,
+      variables: {
+        input: {
+          id: productId,
+          title: bundle.name,
+          descriptionHtml: bundle.description,
+          tags: bundle.tags || [],
+          vendor: bundle.vendor ?? "",
+          status: bundle.status?.toUpperCase(),
+          ...category,
+          metafields: [upsertComponentObj],
+        },
+        media: media,
+      },
+      callback: (result) => {
+        return result.data.productUpdate.product;
+      },
+    });
+    logger("info", "[update-product] Successfully updated the product");
+  } catch (e) {
+    logger("error", "[update-product] Could not update the product", e);
+  }
+  const skuObj = {};
+  if (bundle.sku) {
+    skuObj["sku"] = bundle.sku;
+  }
+  let inventoryPolicy = "";
+  if (bundle.trackInventory) {
+    inventoryPolicy = "DENY";
+  } else {
+    inventoryPolicy = "CONTINUE";
+  }
+
+  const variantIds = [];
+  const variants = product.variants.edges.map(({ node }) => {
+    const isPackaging = node.title === "With Packaging";
+    variantIds.push(node.id);
+    return {
+      id: node.id,
+      price: isPackaging
+        ? bundle.price + (bundle.box?.price ?? 0)
+        : bundle.price,
+      inventoryItem: {
+        tracked: bundle.trackInventory,
+        sku: isPackaging ? `${bundle.sku}_P` : bundle.sku,
+      },
+      inventoryPolicy,
+    };
+  });
+  try {
+    await executeShopifyQueries({
+      accessToken,
+      storeUrl,
+      variables: {
+        productId,
+        variants,
+      },
+      query: PRODUCT_VARIANT_BULK_UPDATE,
+      callback: null,
+    });
+    logger("info", "Successfully Updated the product variant");
+  } catch (e) {
+    logger("error", "[update-product] Could not update the product variant");
+  }
+  let locations;
+  let location;
+  try {
+    locations = await executeShopifyQueries({
+      accessToken,
+      query: GET_STORE_LOCATION,
+      storeUrl,
+      callback: (result) => result.data.locations.edges,
+    });
+    logger("info", "Successfully fetched the store locations");
+  } catch (e) {
+    logger("error", "[update-product] Could not fetch the store locations");
+  }
+  const defaultLocation = locations.find(
+    (l) => l.node.name === "Shop location",
+  );
+  if (!defaultLocation) {
+    location = locations[0].node.id;
+  } else {
+    location = defaultLocation.node.id;
+  }
+  let inventoryIds;
+  try {
+    inventoryIds = await executeShopifyQueries({
+      accessToken,
+      storeUrl,
+      variables: {
+        variantIds: variantIds,
+      },
+      query: GET_PRODUCT_VARIANTS_INVENTORY,
+      callback: (result) => {
+        return result?.data?.nodes.map((obj) => {
+          return {
+            delta: inventoryDelta,
+            inventoryItemId: obj.inventoryItem.id,
+            locationId: location,
+          };
+        });
+      },
+    });
+  } catch (e) {
+    logger("error", "[update-product] Could not fetch the product variant", e);
+  }
+
+  try {
+    await executeShopifyQueries({
+      accessToken,
+      storeUrl,
+      variables: {
+        input: {
+          reason: "correction",
+          name: "available",
+          changes: inventoryIds,
+        },
+      },
+      query: INVENTORY_ADJUST_QUANTITIES,
+      callback: null,
+    });
+  } catch (e) {
+    logger(
+      "error",
+      "[update-product] Could not update the inventory of the variant ",
+      e,
+    );
+  }
 };
