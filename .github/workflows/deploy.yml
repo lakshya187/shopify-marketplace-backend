@@ -29,6 +29,9 @@ jobs:
           ssh -o StrictHostKeyChecking=no $EC2_USER@$EC2_HOST << 'EOF'
             # Navigate to your app directory
             cd giftkart-shopify-app-backend/
+            git checkout staging
+            cd common-functions && git checkout staging && cd ..
+            cd schemas && git checkout staging && cd ..
             
             # Pull latest changes
             git pull origin staging
