@@ -17,7 +17,9 @@ import {
   UPDATE_PRODUCT_WITH_NEW_MEDIA,
 } from "#common-functions/shopify/queries.js";
 import logger from "#common-functions/logger/index.js";
+import StoreDetails from "#schemas/storeDetails.js";
 const bigQueryClient = new GoogleBigQuery(process.env.GCP_PROJECT_ID);
+
 export const CreateBundle = async (req) => {
   try {
     const {
@@ -52,11 +54,23 @@ export const CreateBundle = async (req) => {
         message: "Store not found",
       };
     }
+
     const bundleComponents = [];
     const productIds = components.map((p) => p.productId);
     const bundleProducts = await Products.find({
       _id: { $in: productIds },
     }).lean();
+    const [storeDetails] = await StoreDetails.find({
+      store: store._id,
+    }).lean();
+
+    if (!storeDetails || !storeDetails?.logo) {
+      return {
+        message:
+          "Cannot find the store logo. Make sure to upload the logo before creating bundles",
+        status: 400,
+      };
+    }
     // converting the bundleProduct Array to object for better search time complexity
     const bundleProductMap = covertArrayToMap("_id", bundleProducts);
     // updating the product's dimensions and creating the bundle components
@@ -102,7 +116,7 @@ export const CreateBundle = async (req) => {
         status: 400,
       };
     }
-    const staticImageUrl = `https://giftclub-assets.s3.ap-south-1.amazonaws.com/pack+this+gift+square-27.jpg`;
+    const staticImageUrl = process.env.PACKAGING_IMAGE;
     // images.push(staticImageUrl);
     const netPrice = Number(price) - Number(discount || 0);
     const bundle = new Bundles({

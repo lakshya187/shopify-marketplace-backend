@@ -1,6 +1,7 @@
 import Stores from "#schemas/stores.js";
 import Orders from "#schemas/orders.js";
-import OrderCancel from "#common-functions/shopify/cancelOrder.js";
+import executeShopifyQueries from "#common-functions/shopify/execute.js";
+import { CANCEL_ORDER } from "#common-functions/shopify/queries.js";
 
 export const GetOrders = async (req) => {
   try {
@@ -152,15 +153,17 @@ export const CancelOrder = async (req) => {
     }
     await Promise.all([
       Orders.findByIdAndUpdate(id, { status: "cancelled" }),
-      OrderCancel({
+      executeShopifyQueries({
         accessToken: doesOrderExists.store.accessToken,
-        notifyCustomer: true,
-        orderId: doesOrderExists.orderShopifyId,
-        reason: "CUSTOMER",
-        refund: true,
-        restock: true,
-        shopName: doesOrderExists.store.shopName,
-        staffNote: "",
+        query: CANCEL_ORDER,
+        variables: {
+          notifyCustomer: true,
+          orderId: doesOrderExists.orderShopifyId,
+          reason: "CUSTOMER",
+          refund: true,
+          restock: true,
+          staffNote: "",
+        },
         storeUrl: doesOrderExists.store.storeUrl,
       }),
     ]);
