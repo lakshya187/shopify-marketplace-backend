@@ -9,9 +9,9 @@ export const UpdateStoreSchema = Joi.object({
     .email({ tlds: { allow: false } })
     .required()
     .label("Email"),
-  addressLine1: Joi.string().trim().allow(null, "").label("Address Line 1"),
-  addressLine2: Joi.string().trim().allow(null, "").label("Address Line 2"),
-  landmark: Joi.string().trim().allow("").label("Landmark"),
+  addressLine1: Joi.string().optional(),
+  addressLine2: Joi.string().optional(),
+  landmark: Joi.string().optional(),
   pincode: Joi.string().optional(),
   state: Joi.string().optional(),
   gstNumber: Joi.string().optional(),
