@@ -17,7 +17,9 @@ import {
   UPDATE_PRODUCT_WITH_NEW_MEDIA,
 } from "#common-functions/shopify/queries.js";
 import logger from "#common-functions/logger/index.js";
+import StoreDetails from "#schemas/storeDetails.js";
 const bigQueryClient = new GoogleBigQuery(process.env.GCP_PROJECT_ID);
+
 export const CreateBundle = async (req) => {
   try {
     const {
@@ -52,11 +54,23 @@ export const CreateBundle = async (req) => {
         message: "Store not found",
       };
     }
+
     const bundleComponents = [];
     const productIds = components.map((p) => p.productId);
     const bundleProducts = await Products.find({
       _id: { $in: productIds },
     }).lean();
+    const [storeDetails] = await StoreDetails.find({
+      store: store._id,
+    }).lean();
+
+    if (!storeDetails || !storeDetails?.logo) {
+      return {
+        message:
+          "Cannot find the store logo. Make sure to upload the logo before creating bundles",
+        status: 400,
+      };
+    }
     // converting the bundleProduct Array to object for better search time complexity
     const bundleProductMap = covertArrayToMap("_id", bundleProducts);
     // updating the product's dimensions and creating the bundle components
@@ -102,7 +116,7 @@ export const CreateBundle = async (req) => {
         status: 400,
       };
     }
-    const staticImageUrl = `https://giftclub-assets.s3.ap-south-1.amazonaws.com/pack+this+gift+square-27.jpg`;
+    const staticImageUrl = process.env.PACKAGING_IMAGE;
     // images.push(staticImageUrl);
     const netPrice = Number(price) - Number(discount || 0);
     const bundle = new Bundles({
@@ -615,27 +629,40 @@ export const FetchInventoryOverview = async (req) => {
 
 export const AISearch = async (req) => {
   try {
-    const { query } = req;
+    const { authorization } = req.headers;
+    if (!authorization || authorization !== process.env.SHOPIFY_STORE_SECRET) {
+      return {
+        status: 401,
+        message: "You are not allowed to access this resource.",
+      };
+    }
+    const { query, numberOfResults } = req;
     const searchQuery = `
         SELECT DISTINCT base.content , base.id
           FROM VECTOR_SEARCH(
-            TABLE ${"`"}giftclub-ai-445306.products_dev.product_embeddings${"`"},
+            TABLE ${"`"}${process.env.GCP_PROJECT_ID}.${
+              process.env.GCP_BQ_DATA_SET_ID
+            }.${process.env.GCP_EMBEDDINGS_TABLE}${"`"},
             'embeddings',
             (
                 SELECT  ml_generate_embedding_result
                 FROM ML.GENERATE_EMBEDDING(
-                MODEL ${"`"}giftclub-ai-445306.products_dev.textembedding_gecko${"`"},
+                MODEL ${"`"}${process.env.GCP_PROJECT_ID}.${
+                  process.env.GCP_BQ_DATA_SET_ID
+                }.${process.env.GCP_MODEL_ID}${"`"},
                 (SELECT '${query.query}' AS content))
             ),
-          top_k => 15, options => '{"fraction_lists_to_search": 1}'
+          top_k => ${
+            numberOfResults ?? 5
+          }, options => '{"fraction_lists_to_search": 1}'
         )
         `;
     const aiResult = await bigQueryClient.executeQuery(searchQuery);
-    const productIds = aiResult.map((r) => r.id);
-    const products = await Products.find({ _id: { $in: productIds } });
+    const bundleIds = aiResult.map((r) => r.id);
+    const bundles = await Bundles.find({ _id: { $in: bundleIds } }).lean();
 
     return {
-      data: products,
+      data: bundles,
       message: "Successfully ran the AI search",
       status: 200,
     };
