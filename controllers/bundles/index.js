@@ -117,19 +117,23 @@ export const CreateBundle = async (req) => {
       };
     }
     const staticImageUrl = process.env.PACKAGING_IMAGE;
-    // images.push(staticImageUrl);
-    const netPrice = Number(price) - Number(discount || 0);
+    // const netPrice = Number(price) - Number(discount || 0);
     const bundle = new Bundles({
       name,
       description,
       store: store._id,
-      price: netPrice,
+      price,
       tags: tags || [],
       discount: discount || 0,
       metadata: metadata || {},
       costOfGoods,
       isOnSale,
-      images: [...images, staticImageUrl],
+      images: [
+        ...images,
+        {
+          url: staticImageUrl,
+        },
+      ],
       coverImage,
       profit: Number(price) - Number(costOfGoods),
       status,
@@ -506,7 +510,7 @@ export const UpdateBundle = async (req) => {
     }
 
     const bundleUpdateObj = {
-      price: Number(price) - Number(discount) ?? 0,
+      price,
       tags,
       discount,
       costOfGoods,
@@ -535,6 +539,12 @@ export const UpdateBundle = async (req) => {
       .lean();
 
     const inventoryDelta = updatedBundle.inventory - doesBundleExists.inventory;
+    if (!doesBundleExists.shopifyProductId) {
+      return {
+        status: 200,
+        message: "Bundle updated successfully",
+      };
+    }
     const marketPlace = updateProduct({
       accessToken: internalStore.accessToken,
       shopName: internalStore.shopName,
@@ -559,7 +569,7 @@ export const UpdateBundle = async (req) => {
     await Promise.all([marketPlace, vendor]);
     return {
       status: 200,
-      message: "Bundle updated successfully",
+      message: "Bundle updated successfully on merchant and marketplace.",
     };
   } catch (e) {
     return {
@@ -687,9 +697,9 @@ const updateProduct = async ({
   productId,
   inventoryDelta,
 }) => {
-  let mediaIds;
+  let allMediaIds;
   try {
-    mediaIds = await executeShopifyQueries({
+    allMediaIds = await executeShopifyQueries({
       accessToken,
       callback: (result) => {
         return result.data.product.media.edges.map((edge) => edge.node.id);
@@ -704,13 +714,14 @@ const updateProduct = async ({
   } catch (e) {
     logger("error", "[update-product] Could not find the product media", e);
   }
+
   try {
     await executeShopifyQueries({
       query: PRODUCT_DELETE_MEDIA,
       accessToken,
       storeUrl,
       variables: {
-        mediaIds,
+        mediaIds: allMediaIds,
         productId,
       },
       callback: null,
@@ -775,7 +786,7 @@ const updateProduct = async ({
   if (bundle.coverImage) {
     media.push({
       mediaContentType: "IMAGE",
-      originalSource: bundle.coverImage,
+      originalSource: bundle.coverImage.url,
       alt: `Cover image for ${bundle.name}`,
     });
   }
@@ -783,7 +794,7 @@ const updateProduct = async ({
     bundle.images.forEach((imageUrl, index) => {
       media.push({
         mediaContentType: "IMAGE",
-        originalSource: imageUrl,
+        originalSource: imageUrl.url,
         alt: `Additional image ${index + 1} for ${bundle.name}`,
       });
     });
@@ -834,11 +845,13 @@ const updateProduct = async ({
   const variants = product.variants.edges.map(({ node }) => {
     const isPackaging = node.title === "With Packaging";
     variantIds.push(node.id);
+    const netPrice = Number(bundle.price) - Number(bundle.discount);
     return {
       id: node.id,
-      price: isPackaging
+      compareAtPrice: isPackaging
         ? bundle.price + (bundle.box?.price ?? 0)
         : bundle.price,
+      price: isPackaging ? netPrice + (bundle.box?.price ?? 0) : netPrice,
       inventoryItem: {
         tracked: bundle.trackInventory,
         sku: isPackaging ? `${bundle.sku}_P` : bundle.sku,

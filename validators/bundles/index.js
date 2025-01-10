@@ -34,15 +34,8 @@ export const validateCreateBundle = Joi.object({
   isOnSale: Joi.boolean().optional().messages({
     "boolean.base": "IsOnSale must be a boolean value.",
   }),
-  coverImage: Joi.string().uri().required().messages({
-    "string.base": "Cover Image must be a string.",
-    "string.empty": "Cover Image is required.",
-    "string.uri": "Cover Image must be a valid URL.",
-  }),
-  images: Joi.array().items(Joi.string()).messages({
-    "array.base": "Images must be an array.",
-    "string.base": "Each image must be a string.",
-  }),
+  coverImage: Joi.required(),
+  images: Joi.array().optional(),
   inventory: Joi.number().optional().messages({
     "number.base": "Inventory must be a number.",
   }),
