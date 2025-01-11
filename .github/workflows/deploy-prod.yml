@@ -1,0 +1,65 @@
+name: Deploy to EC2
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  deploy:
+    name: Deploy to EC2
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v3
+
+      - name: Set up SSH agent
+        uses: webfactory/ssh-agent@v0.7.0
+        with:
+          ssh-private-key: ${{ secrets.EC2_SSH_KEY }}
+
+      - name: Deploy to EC2
+        env:
+          EC2_HOST: ${{ secrets.EC2_HOST_PROD }}
+          EC2_USER: ${{ secrets.EC2_USER_PROD }}
+        run: |
+          echo "Starting deployment..."
+
+          ssh -o StrictHostKeyChecking=no $EC2_USER@$EC2_HOST << 'EOF'
+          cd giftkart-shopify-app-backend/
+                
+          cd common-functions
+          git checkout main
+          git pull origin main
+          cd ..
+                
+          cd schemas
+          git checkout main
+          git pull origin main
+          cd ..
+                
+          # Pull latest changes for the main repository
+          git pull origin main
+                
+          # Install dependencies
+          npm install
+                
+          # List all running PM2 processes
+          pm2 list
+                
+          # Find the backend process by name
+          BACKEND_PROCESS_NAME="app-be"
+          BACKEND_PROCESS_ID=$(pm2 list | grep "$BACKEND_PROCESS_NAME" | awk '{print $2}')
+                
+          if [ -n "$BACKEND_PROCESS_ID" ]; then
+            echo "Restarting backend process with ID: $BACKEND_PROCESS_ID"
+            pm2 restart $BACKEND_PROCESS_ID
+          else
+            echo "Backend process '$BACKEND_PROCESS_NAME' not found!"
+            exit 1
+          fi
+          EOF
+
+      - name: Confirm Deployment
+        run: echo "Deployment completed successfully!"
