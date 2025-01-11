@@ -16,7 +16,7 @@ export const GeneratePresignedUrl = async (req) => {
   try {
     const presignedUrl = await s3.getSignedUrlPromise("putObject", params);
     return {
-      data: { presignedUrl, downloadUrl },
+      data: { presignedUrl, downloadUrl: encodeURI(downloadUrl) },
       message: "Successfully generated the Presigned url",
       status: 200,
     };
