@@ -272,19 +272,26 @@ export const DeleteSingleBundle = async (req) => {
         status: 400,
       };
     }
-    await Promise.all([
-      Bundles.findByIdAndDelete(bundleId),
-
-      executeShopifyQueries({
-        query: DELETE_PRODUCT,
-        accessToken: store.accessToken,
-        callback: null,
-        storeUrl: store.storeUrl,
-        variables: {
-          productId: bundle.shopifyProductId,
-        },
-      }),
-    ]);
+    try {
+      await Promise.all([
+        Bundles.findByIdAndDelete(bundleId),
+        executeShopifyQueries({
+          query: DELETE_PRODUCT,
+          accessToken: store.accessToken,
+          callback: null,
+          storeUrl: store.storeUrl,
+          variables: {
+            productId: bundle.shopifyProductId,
+          },
+        }),
+      ]);
+    } catch (e) {
+      logger(
+        "error",
+        "[delete-single-bundle] Error deleting from both shopify and db",
+        e,
+      );
+    }
     return {
       message: "Bundle deleted successfully",
       status: 204,
