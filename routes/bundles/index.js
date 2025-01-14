@@ -12,6 +12,7 @@ import {
   UPDATE_BUNDLE,
   GET_BUNDLE_INVENTORY_OVERVIEW,
   AI_SEARCH,
+  HANDLE_PROMPT,
 } from "../../constants/routes/bundles/index.js";
 import {
   CreateBundle,
@@ -23,6 +24,7 @@ import {
   UpdateBundle,
   FetchInventoryOverview,
   AISearch,
+  HandleConversation,
 } from "../../controllers/bundles/index.js";
 import AuthMiddleware from "../../middlewares/authentication.js";
 import ValidateMiddleware from "../../validators/index.js";
@@ -202,6 +204,24 @@ export default () => {
       });
     } catch (error) {
       logger("error", "Error when generating upload url", error);
+      return ErrorResponseHandler(
+        req,
+        res,
+        error.message || "Internal server error",
+      );
+    }
+  });
+
+  BundleRoutes.post(HANDLE_PROMPT, async (req, res) => {
+    try {
+      const data = await HandleConversation(req);
+      return SuccessResponseHandler(req, res, {
+        status: data.status,
+        message: data.message,
+        data: data.data,
+      });
+    } catch (error) {
+      logger("error", "Error handling prompts", error);
       return ErrorResponseHandler(
         req,
         res,
