@@ -675,7 +675,7 @@ export const AISearch = async (req) => {
                 MODEL ${"`"}${process.env.GCP_PROJECT_ID}.${
                   process.env.GCP_BQ_DATA_SET_ID
                 }.${process.env.GCP_MODEL_ID}${"`"},
-                (SELECT '${query.query}' AS content))
+                (SELECT '''${query.query}''' AS content))
             ),
           top_k => ${
             numberOfResults ?? 5
