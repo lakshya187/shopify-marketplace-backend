@@ -18,6 +18,7 @@ import {
 } from "#common-functions/shopify/queries.js";
 import logger from "#common-functions/logger/index.js";
 import StoreDetails from "#schemas/storeDetails.js";
+
 const bigQueryClient = new GoogleBigQuery(process.env.GCP_PROJECT_ID);
 
 export const CreateBundle = async (req) => {
@@ -545,6 +546,10 @@ export const UpdateBundle = async (req) => {
       .populate("box")
       .lean();
 
+    const storeDetails = await StoreDetails.findOne({
+      store: store._id,
+    });
+
     const inventoryDelta = updatedBundle.inventory - doesBundleExists.inventory;
     if (!doesBundleExists.shopifyProductId) {
       return {
@@ -560,6 +565,7 @@ export const UpdateBundle = async (req) => {
       productId: doesBundleExists.shopifyProductId,
       inventoryDelta,
       storeUrl: internalStore.storeUrl,
+      storeLogo: storeDetails.logo,
     });
     let vendor;
     if (doesBundleExists.metadata?.vendorShopifyId) {
@@ -571,6 +577,8 @@ export const UpdateBundle = async (req) => {
         products: products,
         inventoryDelta,
         storeUrl: store.storeUrl,
+        isVendorProduct: true,
+        storeLogo: storeDetails.logo,
       });
     }
     await Promise.all([marketPlace, vendor]);
@@ -688,6 +696,44 @@ export const AISearch = async (req) => {
   }
 };
 
+export const HandleConversation = async (req) => {
+  try {
+    const { authorization } = req.headers;
+    if (!authorization || authorization !== process.env.SHOPIFY_STORE_SECRET) {
+      return {
+        status: 401,
+        message: "You are not allowed to access this resource.",
+      };
+    }
+    const { prompt } = req.body;
+    const query = `SELECT
+    ml_generate_text_result
+    FROM
+    ML.GENERATE_TEXT(MODEL ${"`"}${process.env.GCP_PROJECT_ID}.${process.env.GCP_BQ_DATA_SET_ID}.${process.env.GCP_GEMINI_MODEL_ID}${"`"},
+    (select "${prompt}" AS prompt),
+    STRUCT(
+      ${process.env.GCP_GEMINI_MODEL_TEMPERATURE} AS temperature, 
+      ${process.env.GCP_GEMINI_MODEL_MAX_TOKENS} AS max_output_tokens 
+    )
+  );
+  `;
+    const [rawResponse] = await bigQueryClient.executeQuery(query);
+    const parsedData = JSON.parse(rawResponse.ml_generate_text_result);
+    const generatedText = parsedData.candidates[0]?.content?.parts[0]?.text;
+    return {
+      data: generatedText,
+      message: "Successfully processed the prompt",
+      status: 200,
+    };
+  } catch (e) {
+    logger("error", "[handle-conversation]", e);
+    return {
+      error: e,
+      status: 500,
+    };
+  }
+};
+
 //utility functions
 const covertArrayToMap = (key, arr) => {
   const map = {};
@@ -703,6 +749,8 @@ const updateProduct = async ({
   storeUrl,
   productId,
   inventoryDelta,
+  isVendorProduct,
+  storeLogo,
 }) => {
   let allMediaIds;
   try {
@@ -778,6 +826,7 @@ const updateProduct = async ({
     upsertComponentObj["value"] = JSON.stringify({
       products: bundle.components,
       box,
+      storeLogo,
     });
   } else {
     upsertComponentObj["namespace"] = "custom";
@@ -785,6 +834,7 @@ const updateProduct = async ({
     upsertComponentObj["value"] = JSON.stringify({
       products: bundle.components,
       box,
+      storeLogo,
     });
     upsertComponentObj["type"] = "json_string";
   }
@@ -823,7 +873,7 @@ const updateProduct = async ({
           descriptionHtml: bundle.description,
           tags: bundle.tags || [],
           vendor: bundle.vendor ?? "",
-          status: bundle.status?.toUpperCase(),
+          status: !isVendorProduct ? "DRAFT" : bundle.status?.toUpperCase(),
           ...category,
           metafields: [upsertComponentObj],
         },
