@@ -698,19 +698,19 @@ export const AISearch = async (req) => {
 
 export const HandleConversation = async (req) => {
   try {
-    const { authorization } = req.headers;
-    if (!authorization || authorization !== process.env.SHOPIFY_STORE_SECRET) {
-      return {
-        status: 401,
-        message: "You are not allowed to access this resource.",
-      };
-    }
+    // const { authorization } = req.headers;
+    // if (!authorization || authorization !== process.env.SHOPIFY_STORE_SECRET) {
+    //   return {
+    //     status: 401,
+    //     message: "You are not allowed to access this resource.",
+    //   };
+    // }
     const { prompt } = req.body;
     const query = `SELECT
     ml_generate_text_result
     FROM
     ML.GENERATE_TEXT(MODEL ${"`"}${process.env.GCP_PROJECT_ID}.${process.env.GCP_BQ_DATA_SET_ID}.${process.env.GCP_GEMINI_MODEL_ID}${"`"},
-    (select "${prompt}" AS prompt),
+    (select '''${prompt}''' AS prompt),
     STRUCT(
       ${process.env.GCP_GEMINI_MODEL_TEMPERATURE} AS temperature, 
       ${process.env.GCP_GEMINI_MODEL_MAX_TOKENS} AS max_output_tokens 
