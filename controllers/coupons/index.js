@@ -1,8 +1,12 @@
 import executeShopifyQueries from "#common-functions/shopify/execute.js";
-import { CREATE_COUPON } from "#common-functions/shopify/queries.js";
+import {
+  CREATE_COUPON,
+  DELETE_COUPON,
+} from "#common-functions/shopify/queries.js";
 import Bundles from "#schemas/bundles.js";
 import Coupons from "#schemas/coupons.js";
 import Stores from "#schemas/stores.js";
+import logger from "#common-functions/logger/index.js";
 
 export const CreateCoupon = async (req) => {
   try {
@@ -212,7 +216,11 @@ export const GetCoupons = async (req) => {
       };
     }
 
-    const coupons = await Coupons.find({ store: store._id, status: "active" })
+    const coupons = await Coupons.find({
+      store: store._id,
+      status: "active",
+      isDeleted: false,
+    })
       .skip(skip)
       .limit(limit)
       .lean();
@@ -226,6 +234,65 @@ export const GetCoupons = async (req) => {
     return {
       status: 500,
       message: error.message || "An error occurred while fetching coupons",
+    };
+  }
+};
+
+export const DeleteCoupon = async (req) => {
+  try {
+    const { user } = req;
+    const [store] = await Stores.find({
+      storeUrl: user.storeUrl,
+    }).lean();
+
+    if (!store) {
+      return {
+        status: 400,
+        message: "Store not found",
+      };
+    }
+    const { id } = req.params;
+    const doesCouponExists = await Coupons.findById(id).lean();
+    if (!doesCouponExists) {
+      return {
+        message: "Coupon does not exists",
+        status: 400,
+      };
+    }
+
+    if (doesCouponExists.store.toString() !== store._id.toString()) {
+      return {
+        message: "You are not allowed to delete this resource",
+        status: 401,
+      };
+    }
+    const marketPlace = await Stores.findOne({
+      isInternalStore: true,
+      isActive: true,
+    }).lean();
+    await Promise.all([
+      executeShopifyQueries({
+        accessToken: marketPlace.accessToken,
+        storeUrl: marketPlace.storeUrl,
+        query: DELETE_COUPON,
+        variables: {
+          id: doesCouponExists.shopifyId,
+        },
+      }),
+      Coupons.findByIdAndUpdate(doesCouponExists._id, {
+        isDeleted: true,
+      }),
+    ]);
+
+    logger("info", "Successfully deleted the coupon from marketplace.");
+    return {
+      message: "Successfully deleted the coupon",
+      status: 204,
+    };
+  } catch (e) {
+    return {
+      status: 500,
+      message: e.message || "Something went wrong",
     };
   }
 };
