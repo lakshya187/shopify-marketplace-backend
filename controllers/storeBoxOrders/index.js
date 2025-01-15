@@ -65,7 +65,6 @@ export const GetAllBoxOrders = async (req) => {
     const { page = 1 } = req.query;
     const limit = 10;
     const skip = (Number(page) - 1) * limit;
-    // Find the store based on the authenticated user's store URL
     const store = await Stores.findOne({ storeUrl: user.storeUrl }).lean();
 
     if (!store) {
