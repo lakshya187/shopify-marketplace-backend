@@ -874,7 +874,7 @@ const updateProduct = async ({
           descriptionHtml: bundle.description,
           tags: bundle.tags || [],
           vendor: bundle.vendor ?? "",
-          status: !isVendorProduct ? "DRAFT" : bundle.status?.toUpperCase(),
+          status: isVendorProduct ? "DRAFT" : bundle.status?.toUpperCase(),
           ...category,
           metafields: [upsertComponentObj],
         },
