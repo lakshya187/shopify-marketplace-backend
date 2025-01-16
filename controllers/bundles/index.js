@@ -29,10 +29,10 @@ export const CreateBundle = async (req) => {
       components,
       price,
       tags,
-      discount,
+      // discount,
       metadata,
       costOfGoods,
-      isOnSale,
+      // isOnSale,
       images,
       coverImage,
       status,
@@ -42,6 +42,7 @@ export const CreateBundle = async (req) => {
       box,
       vendor,
       sku,
+      compareAtPrice,
     } = req.body;
     const { user } = req;
 
@@ -125,10 +126,10 @@ export const CreateBundle = async (req) => {
       store: store._id,
       price,
       tags: tags || [],
-      discount: discount || 0,
+      // discount: discount || 0,
       metadata: metadata || {},
       costOfGoods,
-      isOnSale,
+      // isOnSale,
       images: [
         ...images,
         {
@@ -145,6 +146,7 @@ export const CreateBundle = async (req) => {
       vendor,
       sku,
       components: bundleComponents,
+      compareAtPrice,
     });
     const savedBundle = await bundle.save();
     return {
@@ -424,9 +426,7 @@ export const UpdateBundle = async (req) => {
       components,
       price,
       tags,
-      discount,
       costOfGoods,
-      isOnSale,
       images,
       coverImage,
       status,
@@ -436,6 +436,7 @@ export const UpdateBundle = async (req) => {
       box,
       vendor: vendorName,
       sku,
+      compareAtPrice,
     } = req.body;
     const { user } = req;
     const { id } = req.params;
@@ -520,9 +521,8 @@ export const UpdateBundle = async (req) => {
     const bundleUpdateObj = {
       price,
       tags,
-      discount,
+
       costOfGoods,
-      isOnSale,
       images,
       coverImage,
       status,
@@ -535,6 +535,7 @@ export const UpdateBundle = async (req) => {
       sku,
       components: bundleComponents,
       vendor: vendorName,
+      compareAtPrice,
     };
 
     // update the bundle on merchant, marketplace, db
@@ -906,9 +907,11 @@ const updateProduct = async ({
     return {
       id: node.id,
       compareAtPrice: isPackaging
+        ? bundle.compareAtPrice + (bundle.box?.price ?? 0)
+        : bundle.compareAtPrice,
+      price: isPackaging
         ? bundle.price + (bundle.box?.price ?? 0)
         : bundle.price,
-      price: isPackaging ? netPrice + (bundle.box?.price ?? 0) : netPrice,
       inventoryItem: {
         tracked: bundle.trackInventory,
         sku: isPackaging ? `${bundle.sku}_P` : bundle.sku,
