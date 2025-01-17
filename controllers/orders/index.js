@@ -113,7 +113,9 @@ export const GetOrdersOverview = async (req) => {
     ]);
     if (data) {
       data.salesSummary.total_revenue = `₹${data.salesSummary?.total_revenue}`;
-      data.salesSummary.net_revenue = `₹${data.salesSummary?.net_revenue}`;
+      data.salesSummary.net_revenue = `₹${
+        Number(data.salesSummary?.net_revenue) * 0.8
+      }`;
     }
 
     return {

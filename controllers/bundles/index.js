@@ -903,7 +903,6 @@ const updateProduct = async ({
   const variants = product.variants.edges.map(({ node }) => {
     const isPackaging = node.title === "With Packaging";
     variantIds.push(node.id);
-    const netPrice = Number(bundle.price) - Number(bundle.discount);
     return {
       id: node.id,
       compareAtPrice: isPackaging
