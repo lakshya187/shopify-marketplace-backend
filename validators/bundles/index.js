@@ -45,7 +45,7 @@ export const validateCreateBundle = Joi.object({
   category: Joi.string().optional().messages({
     "string.base": "Category must be a string.",
   }),
-  box: Joi.string().required().messages({
+  box: Joi.optional().messages({
     "string.base": "Box must be a string.",
     "any.required": "Box is required.",
   }),

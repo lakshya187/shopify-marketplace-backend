@@ -13,5 +13,5 @@ export const CreateSupportTicketSchema = Joi.object({
       "any.only":
         "Priority must be one of the following: low, medium, high, urgent",
     }),
-  attachment: Joi.string().optional(),
+  attachment: Joi.optional(),
 });

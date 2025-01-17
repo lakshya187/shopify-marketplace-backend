@@ -10,9 +10,9 @@ export const UpdateStoreSchema = Joi.object({
     .required()
     .label("Email"),
   addressLine1: Joi.string().optional(),
-  addressLine2: Joi.string().optional(),
-  landmark: Joi.string().optional(),
-  pincode: Joi.string().optional(),
+  addressLine2: Joi.optional(),
+  landmark: Joi.optional(),
+  pincode: Joi.optional(),
   state: Joi.string().optional(),
   gstNumber: Joi.string().optional(),
   // .messages({
