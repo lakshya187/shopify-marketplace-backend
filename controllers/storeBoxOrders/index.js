@@ -12,6 +12,10 @@ import {
   PRODUCT_VARIANT_BULK_UPDATE,
   PRODUCT_VARIANTS_CREATE,
 } from "#common-functions/shopify/queries.js";
+import {
+  BUNDLE_PACKAGING_NAMESPACE,
+  BUNDLE_PACKAGING_VARIANT,
+} from "#constants/global.js";
 
 export const CreateStoreBoxOrder = async (req) => {
   try {
@@ -150,37 +154,54 @@ export const UpdateStoreBoxOrder = async (req) => {
 
     if (status === "delivered") {
       let storeBoxPromise = null;
+      const newInventory = [];
       if (storeBoxInventory) {
-        const newInventory = doesBoxOrderExists.orderItems.map((orderItem) => {
-          const isBoxAlreadyAvailable = storeBoxInventory.inventory.find(
-            (b) => {
-              return b.box._id.toString() === orderItem.box._id.toString();
-            },
-          );
-          if (isBoxAlreadyAvailable) {
-            isBoxAlreadyAvailable.quantity += orderItem.quantity;
-            isBoxAlreadyAvailable.remaining += orderItem.quantity;
-            return isBoxAlreadyAvailable;
+        // Create a map of existing inventory for easy lookup
+        const existingInventoryMap = new Map(
+          storeBoxInventory.inventory.map((item) => [
+            item.box.toString(),
+            item,
+          ]),
+        );
+
+        // Update existing inventory or prepare new entries
+        doesBoxOrderExists.orderItems.forEach((orderItem) => {
+          const boxId = orderItem.box._id.toString();
+          if (existingInventoryMap.has(boxId)) {
+            // Update existing inventory
+            const existingItem = existingInventoryMap.get(boxId);
+            existingItem.quantity += orderItem.quantity;
+            existingItem.remaining += orderItem.quantity;
           } else {
-            return {
+            // Add new inventory
+            existingInventoryMap.set(boxId, {
               box: orderItem.box._id,
               quantity: orderItem.quantity,
               remaining: orderItem.quantity,
               used: 0,
-            };
+            });
           }
         });
+
+        // Convert the map back to an array
+        const updatedInventory = Array.from(existingInventoryMap.values());
+
+        // Update the inventory in the database
         storeBoxPromise = StoreBoxes.findByIdAndUpdate(
           storeBoxInventory._id,
           {
-            inventory: newInventory,
+            inventory: updatedInventory,
           },
-          { new: true },
+          { new: true }, // Return updated document
         )
           .lean()
           .populate("inventory.box");
       } else {
-        storeBoxPromise = storeBoxInventory
+        const newStoreBoxInventory = new StoreBoxes({
+          store: doesBoxOrderExists.store,
+          inventory: doesBoxOrderExists.orderItems,
+        });
+        storeBoxPromise = newStoreBoxInventory
           .save()
           .then((savedDocument) => savedDocument.populate("inventory.box"))
           .then((populatedDocument) => {
@@ -195,17 +216,18 @@ export const UpdateStoreBoxOrder = async (req) => {
           });
       }
       const storeBoxInventoryUpdate = await storeBoxPromise;
-      await updateShopify({
-        storeId: store._id,
-        accessToken: marketplace.accessToken,
-        inventory: storeBoxInventoryUpdate.inventory,
-        storeUrl: marketplace.storeUrl,
-      });
-      // await Promise.all([
-      //   StoreBoxOrders.findByIdAndUpdate(doesBoxOrderExists._id, {
-      //     status: "delivered",
-      //   }),
-      // ]);
+
+      await Promise.all([
+        StoreBoxOrders.findByIdAndUpdate(doesBoxOrderExists._id, {
+          status: "delivered",
+        }),
+        updateShopify({
+          storeId: store._id,
+          accessToken: marketplace.accessToken,
+          inventory: storeBoxInventoryUpdate.inventory,
+          storeUrl: marketplace.storeUrl,
+        }),
+      ]);
     }
 
     return {
@@ -227,8 +249,7 @@ const updateShopify = async ({ storeId, accessToken, storeUrl, inventory }) => {
   // find the packaging variant
   // using the variant id, find the inventory item
   // update the inventory item.
-  const PACKAGING_OPTION = "Packaging";
-  const WITH_PACKAGING_OPTION = "With Packaging";
+
   await Promise.all([
     inventory.map(async (inventoryItem) => {
       const bundles = await Bundles.find({
@@ -250,7 +271,7 @@ const updateShopify = async ({ storeId, accessToken, storeUrl, inventory }) => {
                 callback: (result) => {
                   const product = result?.data?.product;
                   const variant = product?.variants?.edges.find(
-                    ({ node }) => node.title === WITH_PACKAGING_OPTION,
+                    ({ node }) => node.title === BUNDLE_PACKAGING_VARIANT,
                   );
                   return variant?.node;
                 },
@@ -303,8 +324,8 @@ const updateShopify = async ({ storeId, accessToken, storeUrl, inventory }) => {
                     {
                       optionValues: [
                         {
-                          name: WITH_PACKAGING_OPTION,
-                          optionName: PACKAGING_OPTION,
+                          name: BUNDLE_PACKAGING_VARIANT,
+                          optionName: BUNDLE_PACKAGING_NAMESPACE,
                         },
                       ],
                     },
@@ -312,7 +333,7 @@ const updateShopify = async ({ storeId, accessToken, storeUrl, inventory }) => {
                 },
                 callback: (result) => {
                   return result.data.productVariantsBulkCreate.productVariants.find(
-                    (item) => item.title === WITH_PACKAGING_OPTION,
+                    (item) => item.title === BUNDLE_PACKAGING_VARIANT,
                   );
                 },
               });
@@ -334,7 +355,9 @@ const updateShopify = async ({ storeId, accessToken, storeUrl, inventory }) => {
             try {
               await executeShopifyQueries({
                 accessToken,
-                callback: null,
+                callback: (result) => {
+                  return result;
+                },
                 query: PRODUCT_VARIANT_BULK_UPDATE,
                 storeUrl,
                 variables: {
@@ -374,8 +397,21 @@ const updateShopify = async ({ storeId, accessToken, storeUrl, inventory }) => {
                 accessToken,
                 callback: (result) => {
                   return result?.data?.nodes.map((obj) => {
+                    const currentVariantQuantity =
+                      packagingVariant?.inventoryQuantity || 0;
+                    const maxAllowedInventory = bundle.inventory;
+
+                    // New quantity to set, capped by the bundle's inventory
+                    const newVariantQuantity = Math.min(
+                      inventoryItem.remaining,
+                      maxAllowedInventory,
+                    );
+
+                    // Calculate delta (difference between new and current quantities)
+                    const updatedInventoryDelta =
+                      newVariantQuantity - currentVariantQuantity;
                     return {
-                      delta: inventoryItem.remaining,
+                      delta: updatedInventoryDelta,
                       inventoryItemId: obj.inventoryItem.id,
                       locationId: location,
                     };

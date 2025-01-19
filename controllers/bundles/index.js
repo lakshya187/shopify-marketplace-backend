@@ -18,6 +18,7 @@ import {
 } from "#common-functions/shopify/queries.js";
 import logger from "#common-functions/logger/index.js";
 import StoreDetails from "#schemas/storeDetails.js";
+import { BUNDLE_PACKAGING_VARIANT } from "#constants/global.js";
 
 const bigQueryClient = new GoogleBigQuery(process.env.GCP_PROJECT_ID);
 
@@ -901,7 +902,7 @@ const updateProduct = async ({
 
   const variantIds = [];
   const variants = product.variants.edges.map(({ node }) => {
-    const isPackaging = node.title === "With Packaging";
+    const isPackaging = node.title === BUNDLE_PACKAGING_VARIANT;
     variantIds.push(node.id);
     return {
       id: node.id,
