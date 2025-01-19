@@ -117,12 +117,12 @@ export const UpdateStoreBoxOrder = async (req) => {
     const [store] = await Stores.find({
       storeUrl: user.storeUrl,
     }).lean();
-    // if (!store.isInternalStore) {
-    //   return {
-    //     status: 401,
-    //     message: "You are not allowed to modify this order",
-    //   };
-    // }
+    if (!store.isInternalStore) {
+      return {
+        status: 401,
+        message: "You are not allowed to modify this order",
+      };
+    }
     const marketplace = await Stores.findOne({
       isInternalStore: true,
       isActive: true,
