@@ -98,8 +98,8 @@ export const GetOrdersOverview = async (req) => {
         $project: {
           _id: 0,
           salesSummary: {
-            total_revenue: { $round: ["$totalRevenue", 2] },
-            net_revenue: {
+            total_sales: { $round: ["$totalRevenue", 2] },
+            net_balance: {
               $round: ["$totalRevenue", 2],
             },
           },
@@ -112,9 +112,9 @@ export const GetOrdersOverview = async (req) => {
       },
     ]);
     if (data) {
-      data.salesSummary.total_revenue = `₹${data.salesSummary?.total_revenue}`;
-      data.salesSummary.net_revenue = `₹${
-        Number(data.salesSummary?.net_revenue) * 0.8
+      data.salesSummary.total_sales = `₹${data.salesSummary?.total_sales}`;
+      data.salesSummary.net_balance = `₹${
+        Number(data.salesSummary?.net_balance) * 0.8
       }`;
     }
 
