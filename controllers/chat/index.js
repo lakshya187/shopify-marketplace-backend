@@ -250,7 +250,11 @@ const generateSemanticSearchQuery = async ({ query, numberOfResults }) => {
     const aiResult = await bigQueryClient.executeQuery(searchQuery);
     const bundleIds = aiResult.map((r) => r.id);
     const bundles = await Bundles.find({ _id: { $in: bundleIds } }).lean();
-    return bundles;
+    const bundlesInOrder = bundleIds.map((id) =>
+      bundles.find((bundle) => bundle._id.toString() === id),
+    );
+
+    return bundlesInOrder;
   } catch (e) {
     logger(
       "error",
@@ -259,3 +263,5 @@ const generateSemanticSearchQuery = async ({ query, numberOfResults }) => {
     );
   }
 };
+
+// '        SELECT DISTINCT base.content , base.id          FROM VECTOR_SEARCH(            TABLE `giftclub-ai-445306.giftclub_prod.bundles_embeddings`,            \'embeddings\',            (                SELECT  ml_generate_embedding_result                FROM ML.GENERATE_EMBEDDING(                MODEL `giftclub-ai-445306.giftclub_prod.textembedding_gecko`,                (SELECT \'\'\'birthday gifts for a dance-loving friend\'\'\' AS content))            ),          top_k => 10, options => \'{"fraction_lists_to_search": 1}\'        )        ';
