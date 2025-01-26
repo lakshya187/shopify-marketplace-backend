@@ -44,6 +44,7 @@ export const CreateBundle = async (req) => {
       vendor,
       sku,
       compareAtPrice,
+      options,
     } = req.body;
     const { user } = req;
 
@@ -119,6 +120,7 @@ export const CreateBundle = async (req) => {
         status: 400,
       };
     }
+
     const staticImageUrl = process.env.PACKAGING_IMAGE;
     // const netPrice = Number(price) - Number(discount || 0);
     const bundle = new Bundles({
@@ -148,6 +150,7 @@ export const CreateBundle = async (req) => {
       sku,
       components: bundleComponents,
       compareAtPrice,
+      options,
     });
     const savedBundle = await bundle.save();
     return {
@@ -156,6 +159,7 @@ export const CreateBundle = async (req) => {
       data: savedBundle,
     };
   } catch (e) {
+    logger("error", "Error when creating the bundle", e);
     return {
       status: 500,
       message: e,

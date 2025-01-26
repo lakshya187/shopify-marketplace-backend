@@ -16,6 +16,7 @@ import VerifyShopifyWebhook from "../middlewares/shopify-webhook-verify.js";
 import StoreDetailsRoutes from "./storeDetails/index.js";
 import MediaRoutes from "./media/index.js";
 import ChatRoutes from "./chat/index.js";
+import CartRoutes from "./carts/index.js";
 
 const RouteHandler = Router();
 
@@ -36,6 +37,7 @@ export default () => {
   RouteHandler.use("/store-details", StoreDetailsRoutes());
   RouteHandler.use("/media", MediaRoutes());
   RouteHandler.use("/chat", ChatRoutes());
+  RouteHandler.use("/cart", CartRoutes());
 
   return RouteHandler;
 };
