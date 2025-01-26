@@ -57,6 +57,7 @@ export const validateCreateBundle = Joi.object({
     "string.base": "SKU must be a string.",
   }),
   compareAtPrice: Joi.optional(),
+  options: Joi.optional(),
 });
 
 export const validateGenerateUrl = Joi.object({

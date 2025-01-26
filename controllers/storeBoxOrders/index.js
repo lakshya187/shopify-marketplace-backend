@@ -5,6 +5,7 @@ import logger from "#common-functions/logger/index.js";
 import Bundles from "#schemas/bundles.js";
 import executeShopifyQueries from "#common-functions/shopify/execute.js";
 import {
+  CREATE_PRODUCT_WITH_MEDIA,
   GET_PRODUCT_DETAILS,
   GET_PRODUCT_VARIANTS_INVENTORY,
   GET_STORE_LOCATION,
@@ -117,12 +118,12 @@ export const UpdateStoreBoxOrder = async (req) => {
     const [store] = await Stores.find({
       storeUrl: user.storeUrl,
     }).lean();
-    if (!store.isInternalStore) {
-      return {
-        status: 401,
-        message: "You are not allowed to modify this order",
-      };
-    }
+    // if (!store.isInternalStore) {
+    //   return {
+    //     status: 401,
+    //     message: "You are not allowed to modify this order",
+    //   };
+    // }
     const marketplace = await Stores.findOne({
       isInternalStore: true,
       isActive: true,
@@ -208,7 +209,8 @@ export const UpdateStoreBoxOrder = async (req) => {
             return populatedDocument;
           })
           .catch((error) => {
-            console.error(
+            logger(
+              "error",
               "Error saving or populating store box inventory:",
               error,
             );
@@ -223,9 +225,9 @@ export const UpdateStoreBoxOrder = async (req) => {
         }),
         updateShopify({
           storeId: store._id,
-          accessToken: marketplace.accessToken,
+          accessToken: store.accessToken,
           inventory: storeBoxInventoryUpdate.inventory,
-          storeUrl: marketplace.storeUrl,
+          storeUrl: store.storeUrl,
         }),
       ]);
     }
@@ -245,223 +247,294 @@ export const UpdateStoreBoxOrder = async (req) => {
 };
 
 const updateShopify = async ({ storeId, accessToken, storeUrl, inventory }) => {
-  // loop over the inventory, find the bundles which are associated with that packaging.
-  // find the packaging variant
-  // using the variant id, find the inventory item
-  // update the inventory item.
+  for (const item of inventory) {
+    if (item.shopify?.productId && item.shopify?.variantId) {
+      let isPackagingVariantAvailable;
+      try {
+        isPackagingVariantAvailable = await executeShopifyQueries({
+          accessToken: accessToken,
+          callback: (result) => {
+            return result?.data?.product?.variants?.edges[0]?.node;
+          },
+          query: GET_PRODUCT_DETAILS,
+          storeUrl,
+          variables: {
+            id: item.shopify.productId,
+          },
+        });
 
-  await Promise.all([
-    inventory.map(async (inventoryItem) => {
-      const bundles = await Bundles.find({
-        box: inventoryItem.box._id,
-        store: storeId,
-      }).lean();
-      if (bundles.length) {
-        for (const bundle of bundles) {
-          let packagingVariant;
-          if (bundle.shopifyProductId) {
-            try {
-              packagingVariant = await executeShopifyQueries({
-                query: GET_PRODUCT_DETAILS,
-                variables: {
-                  id: bundle.shopifyProductId,
-                },
-                accessToken,
+        logger("info", "Successfully fetched the packaging product");
+      } catch (e) {
+        logger("error", "[update-shopify] Could not fetch the box product", e);
+        throw new Error(JSON.stringify(e));
+      }
 
-                callback: (result) => {
-                  const product = result?.data?.product;
-                  const variant = product?.variants?.edges.find(
-                    ({ node }) => node.title === BUNDLE_PACKAGING_VARIANT,
-                  );
-                  return variant?.node;
-                },
-                storeUrl,
-              });
-              logger("info", "successfully fetched the bundle details");
-            } catch (e) {
-              logger(
-                "error",
-                "[update-store-box-order] Could not fetch bundle details",
-              );
-              throw new Error(
-                "Could not fetch bundle details for " + bundle._id,
-              );
-            }
-          }
-          let locations;
-          let location;
-          try {
-            locations = await executeShopifyQueries({
-              accessToken,
-              query: GET_STORE_LOCATION,
-              storeUrl,
-              callback: (result) => result.data.locations.edges,
-            });
-            logger("info", "Successfully fetched the store locations");
-          } catch (e) {
-            logger(
-              "error",
-              "[update-store-box-order] Could not fetch the store locations",
-            );
-          }
-          const defaultLocation = locations.find(
-            (l) => l.node.name === "Shop location",
-          );
-          if (!defaultLocation) {
-            location = locations[0].node.id;
-          } else {
-            location = defaultLocation.node.id;
-          }
-          if (!packagingVariant) {
-            try {
-              packagingVariant = await executeShopifyQueries({
-                accessToken,
-                query: PRODUCT_VARIANTS_CREATE,
-                storeUrl,
-                variables: {
-                  productId: bundle.shopifyProductId,
-                  variants: [
-                    {
-                      optionValues: [
-                        {
-                          name: BUNDLE_PACKAGING_VARIANT,
-                          optionName: BUNDLE_PACKAGING_NAMESPACE,
-                        },
-                      ],
-                    },
-                  ],
-                },
-                callback: (result) => {
-                  return result.data.productVariantsBulkCreate.productVariants.find(
-                    (item) => item.title === BUNDLE_PACKAGING_VARIANT,
-                  );
-                },
-              });
-              logger("info", "successfully added the packing variant.");
-            } catch (e) {
-              logger(
-                "error",
-                `[update-store-box-order] Could add the product packaging option`,
-                e,
-              );
-              return;
-            }
-            let inventoryPolicy = "";
-            if (bundle.trackInventory) {
-              inventoryPolicy = "DENY";
-            } else {
-              inventoryPolicy = "CONTINUE";
-            }
-            try {
-              await executeShopifyQueries({
-                accessToken,
-                callback: (result) => {
-                  return result;
-                },
-                query: PRODUCT_VARIANT_BULK_UPDATE,
-                storeUrl,
-                variables: {
-                  productId: bundle.shopifyProductId,
-                  variants: [
-                    {
-                      id: packagingVariant.id,
-                      compareAtPrice: bundle.compareAtPrice
-                        ? Number(bundle.compareAtPrice) +
-                          inventoryItem.box.price
-                        : undefined,
-                      price: bundle.price + inventoryItem.box.price,
-
-                      inventoryItem: {
-                        tracked: bundle.trackInventory,
-                        sku: `${bundle.sku}_P`,
-                      },
-                      inventoryPolicy,
-                    },
-                  ],
-                },
-              });
-              logger("info", "Successfully updated then product variant");
-            } catch (e) {
-              logger(
-                "error",
-                `[update-store-box-order] Could update the product's default variant`,
-                e,
-              );
-              throw new Error(e);
-            }
-          }
-          if (packagingVariant && packagingVariant.id) {
-            let variantIdUpdateObj;
-            try {
-              variantIdUpdateObj = await executeShopifyQueries({
-                accessToken,
-                callback: (result) => {
-                  return result?.data?.nodes.map((obj) => {
-                    const currentVariantQuantity =
-                      packagingVariant?.inventoryQuantity || 0;
-                    const maxAllowedInventory = bundle.inventory;
-
-                    // New quantity to set, capped by the bundle's inventory
-                    const newVariantQuantity = Math.min(
-                      inventoryItem.remaining,
-                      maxAllowedInventory,
-                    );
-
-                    // Calculate delta (difference between new and current quantities)
-                    const updatedInventoryDelta =
-                      newVariantQuantity - currentVariantQuantity;
-                    return {
-                      delta: updatedInventoryDelta,
-                      inventoryItemId: obj.inventoryItem.id,
-                      locationId: location,
-                    };
-                  });
-                },
-                query: GET_PRODUCT_VARIANTS_INVENTORY,
-                storeUrl,
-                variables: {
-                  variantIds: [packagingVariant.id],
-                },
-              });
-            } catch (e) {
-              logger(
-                "error",
-                "[update-store-box-order] Could not fetch the variant inventory",
-                e,
-              );
-              throw Error(e);
-            }
-            try {
-              const inventoryAdjustQuantitiesVariables = {
-                input: {
-                  reason: "correction",
-                  name: "available",
-                  changes: variantIdUpdateObj,
-                },
-              };
-
-              await executeShopifyQueries({
-                accessToken,
-                callback: null,
-                query: INVENTORY_ADJUST_QUANTITIES,
-                storeUrl,
-                variables: inventoryAdjustQuantitiesVariables,
-              });
-              logger(
-                "info",
-                "Successfully updated inventory for the default variant",
-              );
-            } catch (e) {
-              logger(
-                "error",
-                `[update-store-box-order] Could adjust the inventory quantities`,
-                e,
-              );
-              throw new Error(e);
-            }
-          }
+      let locations = [];
+      let location;
+      try {
+        locations = await executeShopifyQueries({
+          query: GET_STORE_LOCATION,
+          accessToken,
+          callback: (result) => result.data.locations.edges,
+          storeUrl,
+          variables: null,
+        });
+        logger("info", "Successfully fetched the store locations");
+      } catch (e) {
+        logger(
+          "error",
+          `[migrate-bundles-marketplace[create-store-product]] Could not get the location of the store`,
+          e,
+        );
+        throw new Error(e);
+      }
+      if (locations.length) {
+        const defaultLocation = locations.find(
+          (l) => l.node.name === "Shop location",
+        );
+        if (!defaultLocation) {
+          location = locations[0].node.id;
+        } else {
+          location = defaultLocation.node.id;
         }
       }
-    }),
-  ]);
+      if (isPackagingVariantAvailable) {
+        const updateObj = {
+          price: item.box.price,
+          inventoryPolicy: "DENY",
+          id: isPackagingVariantAvailable.id,
+          inventoryItem: {
+            tracked: true,
+          },
+        };
+
+        try {
+          await executeShopifyQueries({
+            accessToken,
+            callback: null,
+            query: PRODUCT_VARIANT_BULK_UPDATE,
+            storeUrl,
+            variables: {
+              productId: item.shopify?.productId,
+              variants: [updateObj],
+            },
+          });
+        } catch (e) {
+          logger(
+            "error",
+            "Could not Update the product variant for packaging",
+            e,
+          );
+        }
+
+        try {
+          await adjustShopifyInventory({
+            variantIds: [isPackagingVariantAvailable.id],
+            location,
+            delta:
+              item.remaining -
+                Number(isPackagingVariantAvailable.inventoryQuantity) || 0,
+            accessToken,
+            storeUrl,
+          });
+        } catch (e) {
+          logger("error", "Could not adjust the inventory item", e);
+        }
+      } else {
+        // TODO : create the packaging variant with the current quantity
+      }
+
+      // fetch the product using shopifyId
+      // update the variant
+    } else {
+      let product;
+      let packagingVariant;
+      try {
+        product = await executeShopifyQueries({
+          query: CREATE_PRODUCT_WITH_MEDIA,
+          accessToken,
+          callback: (result) => {
+            const product = result.data?.productCreate?.product;
+            packagingVariant = product.variants?.edges[0]?.node;
+            return product;
+          },
+          storeUrl,
+          variables: {
+            input: {
+              title: item.box.name,
+              descriptionHtml:
+                item.box.name || "Packaging generated through giftclub",
+              tags: ["auto-generated", "giftclub", "packaging"],
+              vendor: "giftclub",
+              status: "DRAFT",
+              productOptions: [
+                {
+                  name: BUNDLE_PACKAGING_NAMESPACE,
+                  values: [
+                    {
+                      name: "default",
+                    },
+                  ],
+                },
+              ],
+            },
+            media: [],
+          },
+        });
+        logger("info", "Successfully created the product on the store");
+      } catch (e) {
+        logger("error", `[update-shopify] Could not create store product`, e);
+        throw new Error(e);
+      }
+      let locations = [];
+      let location;
+      try {
+        locations = await executeShopifyQueries({
+          query: GET_STORE_LOCATION,
+          accessToken,
+          callback: (result) => result.data.locations.edges,
+          storeUrl,
+          variables: null,
+        });
+        logger("info", "Successfully fetched the store locations");
+      } catch (e) {
+        logger(
+          "error",
+          `[migrate-bundles-marketplace[create-store-product]] Could not get the location of the store`,
+          e,
+        );
+        throw new Error(e);
+      }
+      if (locations.length) {
+        const defaultLocation = locations.find(
+          (l) => l.node.name === "Shop location",
+        );
+        if (!defaultLocation) {
+          location = locations[0].node.id;
+        } else {
+          location = defaultLocation.node.id;
+        }
+      }
+      if (packagingVariant) {
+        const updateObj = {
+          price: item.box.price,
+          inventoryPolicy: "DENY",
+          id: packagingVariant.id,
+          inventoryItem: {
+            tracked: true,
+          },
+        };
+
+        try {
+          await executeShopifyQueries({
+            accessToken,
+            callback: null,
+            query: PRODUCT_VARIANT_BULK_UPDATE,
+            storeUrl,
+            variables: {
+              productId: product.id,
+              variants: [updateObj],
+            },
+          });
+          logger("info", "Successfully updated then product variant");
+        } catch (e) {
+          logger(
+            "error",
+            `[migrate-bundles-marketplace[create-store-product]] Could update the product's default variant`,
+            e,
+          );
+          throw new Error(e);
+        }
+      }
+      try {
+        await adjustShopifyInventory({
+          variantIds: [packagingVariant.id],
+          location,
+          delta: item.remaining,
+          accessToken,
+          storeUrl,
+        });
+      } catch (e) {
+        logger("error", "Could not adjust the inventory item", e);
+      }
+      item.shopify = {
+        productId: product.id,
+        variantId: packagingVariant.id,
+      };
+      // create new shopify product.
+      // update the variant with the inventory
+    }
+  }
+  await StoreBoxes.findOneAndUpdate(
+    {
+      store: storeId,
+    },
+    {
+      inventory,
+    },
+  );
+};
+
+const adjustShopifyInventory = async ({
+  variantIds,
+  delta,
+  location,
+  accessToken,
+  storeUrl,
+}) => {
+  const variantInventoryVariables = {
+    variantIds,
+  };
+  let inventoryUpdateObjs;
+  try {
+    inventoryUpdateObjs = await executeShopifyQueries({
+      accessToken,
+      callback: (result) => {
+        return result?.data?.nodes.map((obj) => {
+          return {
+            delta,
+            inventoryItemId: obj.inventoryItem.id,
+            locationId: location,
+          };
+        });
+      },
+      query: GET_PRODUCT_VARIANTS_INVENTORY,
+      storeUrl,
+      variables: variantInventoryVariables,
+    });
+    logger("info", "Successfully fetched the inventory for the variants");
+  } catch (e) {
+    logger(
+      "error",
+      `[migrate-bundles-marketplace[create-store-product]] Could not get the  default variant inventory id`,
+      e,
+    );
+    throw new Error(e);
+  }
+
+  try {
+    const inventoryAdjustQuantitiesVariables = {
+      input: {
+        reason: "correction",
+        name: "available",
+        changes: inventoryUpdateObjs,
+      },
+    };
+
+    await executeShopifyQueries({
+      accessToken,
+      callback: null,
+      query: INVENTORY_ADJUST_QUANTITIES,
+      storeUrl,
+      variables: inventoryAdjustQuantitiesVariables,
+    });
+    logger("info", "Successfully updated inventory for the default variant");
+  } catch (e) {
+    logger(
+      "error",
+      `[migrate-bundles-marketplace[create-store-product]] Could adjust the inventory quantities`,
+      e,
+    );
+    throw new Error(e);
+  }
 };
