@@ -185,6 +185,7 @@ export const GetBundles = async (req) => {
 
     const bundles = await Bundles.find({
       store: store._id,
+      isTemp: false,
     })
       .skip(skip)
       .limit(limit)
@@ -264,6 +265,10 @@ export const DeleteSingleBundle = async (req) => {
     const [store] = await Stores.find({
       storeUrl: user.storeUrl,
     }).lean();
+    const marketPlace = await Stores.findOne({
+      isActive: true,
+      isInternalStore: true,
+    });
     if (!store) {
       return {
         status: 400,
@@ -280,6 +285,7 @@ export const DeleteSingleBundle = async (req) => {
         status: 400,
       };
     }
+    executeShopifyQueries({});
     try {
       await Promise.all([
         Bundles.findByIdAndDelete(bundleId),
