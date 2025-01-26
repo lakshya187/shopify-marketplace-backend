@@ -481,40 +481,40 @@ export const UpdateBundle = async (req) => {
         status: 400,
       };
     }
-    const bundleComponents = [];
-    const productIds = components.map((p) => p.productId);
+    // const bundleComponents = [];
+    // const productIds = components.map((p) => p.productId);
 
-    const bundleProducts = await Products.find({
-      _id: { $in: productIds },
-    }).lean();
-    const bundleProductMap = covertArrayToMap("_id", bundleProducts);
-    const products = await Promise.all(
-      components
-        .map(async (productObj) => {
-          const product = bundleProductMap[productObj.productId];
-          if (!product) {
-            return null;
-          }
-          const isVariantValid = product.variants.find(
-            (v) => v.id === productObj.variantId,
-          );
+    // const bundleProducts = await Products.find({
+    //   _id: { $in: productIds },
+    // }).lean();
+    // const bundleProductMap = covertArrayToMap("_id", bundleProducts);
+    // const products = await Promise.all(
+    //   components
+    //     .map(async (productObj) => {
+    //       const product = bundleProductMap[productObj.productId];
+    //       if (!product) {
+    //         return null;
+    //       }
+    //       const isVariantValid = product.variants.find(
+    //         (v) => v.id === productObj.variantId,
+    //       );
 
-          if (product && isVariantValid) {
-            const dimensions = {
-              length: productObj.dimensions.length,
-              weight: productObj.dimensions.weight,
-              width: productObj.dimensions.width,
-              height: productObj.dimensions.height,
-            };
-            bundleComponents.push({
-              product: product._id,
-              variant: isVariantValid,
-            });
-            return Products.findByIdAndUpdate(product._id, dimensions);
-          }
-        })
-        .filter(Boolean),
-    );
+    //       if (product && isVariantValid) {
+    //         const dimensions = {
+    //           length: productObj.dimensions.length,
+    //           weight: productObj.dimensions.weight,
+    //           width: productObj.dimensions.width,
+    //           height: productObj.dimensions.height,
+    //         };
+    //         bundleComponents.push({
+    //           product: product._id,
+    //           variant: isVariantValid,
+    //         });
+    //         return Products.findByIdAndUpdate(product._id, dimensions);
+    //       }
+    //     })
+    //     .filter(Boolean),
+    // );
     const doesCategoryExists = await Categories.findById(category);
     if (!doesCategoryExists) {
       return {
@@ -522,12 +522,12 @@ export const UpdateBundle = async (req) => {
         status: 400,
       };
     }
-    if (components.length !== products.length) {
-      return {
-        message: "Not all the product ids provided are valid",
-        status: 400,
-      };
-    }
+    // if (components.length !== products.length) {
+    //   return {
+    //     message: "Not all the product ids provided are valid",
+    //     status: 400,
+    //   };
+    // }
 
     const bundleUpdateObj = {
       price,
@@ -544,7 +544,7 @@ export const UpdateBundle = async (req) => {
       category,
       box,
       sku,
-      components: bundleComponents,
+      // components: bundleComponents,
       vendor: vendorName,
       compareAtPrice,
     };
@@ -573,7 +573,7 @@ export const UpdateBundle = async (req) => {
       accessToken: internalStore.accessToken,
       shopName: internalStore.shopName,
       bundle: updatedBundle,
-      products: products,
+      // products: products,
       productId: doesBundleExists.shopifyProductId,
       inventoryDelta,
       storeUrl: internalStore.storeUrl,
@@ -586,7 +586,7 @@ export const UpdateBundle = async (req) => {
         shopName: store.shopName,
         bundle: updatedBundle,
         productId: doesBundleExists.metadata.vendorShopifyId,
-        products: products,
+        // products: products,
         inventoryDelta,
         storeUrl: store.storeUrl,
         isVendorProduct: true,
@@ -887,7 +887,7 @@ const updateProduct = async ({
           vendor: bundle.vendor ?? "",
           status: isVendorProduct ? "DRAFT" : bundle.status?.toUpperCase(),
           ...category,
-          metafields: [upsertComponentObj],
+          // metafields: [upsertComponentObj],
         },
         media: media,
       },
@@ -912,21 +912,17 @@ const updateProduct = async ({
 
   const variantIds = [];
   const variants = product.variants.edges.map(({ node }) => {
-    const isPackaging = node.title === BUNDLE_PACKAGING_VARIANT;
+    // const  = node.title === BUNDLE_PACKAGING_VARIANT;
     variantIds.push(node.id);
     return {
       id: node.id,
-      compareAtPrice: isPackaging
-        ? bundle.compareAtPrice + (bundle.box?.price ?? 0)
-        : bundle.compareAtPrice,
-      price: isPackaging
-        ? bundle.price + (bundle.box?.price ?? 0)
-        : bundle.price,
-      inventoryItem: {
-        tracked: bundle.trackInventory,
-        sku: isPackaging ? `${bundle.sku}_P` : bundle.sku,
-      },
-      inventoryPolicy,
+      compareAtPrice: bundle.compareAtPrice,
+      price: bundle.price,
+      // inventoryItem: {
+      //   tracked: bundle.trackInventory,
+      //   sku: isPackaging ? `${bundle.sku}_P` : bundle.sku,
+      // },
+      // inventoryPolicy,
     };
   });
   try {
@@ -944,69 +940,69 @@ const updateProduct = async ({
   } catch (e) {
     logger("error", "[update-product] Could not update the product variant");
   }
-  let locations;
-  let location;
-  try {
-    locations = await executeShopifyQueries({
-      accessToken,
-      query: GET_STORE_LOCATION,
-      storeUrl,
-      callback: (result) => result.data.locations.edges,
-    });
-    logger("info", "Successfully fetched the store locations");
-  } catch (e) {
-    logger("error", "[update-product] Could not fetch the store locations");
-  }
-  const defaultLocation = locations.find(
-    (l) => l.node.name === "Shop location",
-  );
-  if (!defaultLocation) {
-    location = locations[0].node.id;
-  } else {
-    location = defaultLocation.node.id;
-  }
-  let inventoryIds;
-  try {
-    inventoryIds = await executeShopifyQueries({
-      accessToken,
-      storeUrl,
-      variables: {
-        variantIds: variantIds,
-      },
-      query: GET_PRODUCT_VARIANTS_INVENTORY,
-      callback: (result) => {
-        return result?.data?.nodes.map((obj) => {
-          return {
-            delta: inventoryDelta,
-            inventoryItemId: obj.inventoryItem.id,
-            locationId: location,
-          };
-        });
-      },
-    });
-  } catch (e) {
-    logger("error", "[update-product] Could not fetch the product variant", e);
-  }
+  // let locations;
+  // let location;
+  // try {
+  //   locations = await executeShopifyQueries({
+  //     accessToken,
+  //     query: GET_STORE_LOCATION,
+  //     storeUrl,
+  //     callback: (result) => result.data.locations.edges,
+  //   });
+  //   logger("info", "Successfully fetched the store locations");
+  // } catch (e) {
+  //   logger("error", "[update-product] Could not fetch the store locations");
+  // }
+  // const defaultLocation = locations.find(
+  //   (l) => l.node.name === "Shop location",
+  // );
+  // if (!defaultLocation) {
+  //   location = locations[0].node.id;
+  // } else {
+  //   location = defaultLocation.node.id;
+  // }
+  // let inventoryIds;
+  // try {
+  //   inventoryIds = await executeShopifyQueries({
+  //     accessToken,
+  //     storeUrl,
+  //     variables: {
+  //       variantIds: variantIds,
+  //     },
+  //     query: GET_PRODUCT_VARIANTS_INVENTORY,
+  //     callback: (result) => {
+  //       return result?.data?.nodes.map((obj) => {
+  //         return {
+  //           delta: inventoryDelta,
+  //           inventoryItemId: obj.inventoryItem.id,
+  //           locationId: location,
+  //         };
+  //       });
+  //     },
+  //   });
+  // } catch (e) {
+  //   logger("error", "[update-product] Could not fetch the product variant", e);
+  // }
 
-  try {
-    await executeShopifyQueries({
-      accessToken,
-      storeUrl,
-      variables: {
-        input: {
-          reason: "correction",
-          name: "available",
-          changes: inventoryIds,
-        },
-      },
-      query: INVENTORY_ADJUST_QUANTITIES,
-      callback: null,
-    });
-  } catch (e) {
-    logger(
-      "error",
-      "[update-product] Could not update the inventory of the variant ",
-      e,
-    );
-  }
+  // try {
+  //   await executeShopifyQueries({
+  //     accessToken,
+  //     storeUrl,
+  //     variables: {
+  //       input: {
+  //         reason: "correction",
+  //         name: "available",
+  //         changes: inventoryIds,
+  //       },
+  //     },
+  //     query: INVENTORY_ADJUST_QUANTITIES,
+  //     callback: null,
+  //   });
+  // } catch (e) {
+  //   logger(
+  //     "error",
+  //     "[update-product] Could not update the inventory of the variant ",
+  //     e,
+  //   );
+  // }
 };
