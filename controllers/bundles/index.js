@@ -186,6 +186,7 @@ export const GetBundles = async (req) => {
     const bundles = await Bundles.find({
       store: store._id,
       isTemp: false,
+      isDeleted: false,
     })
       .skip(skip)
       .limit(limit)
@@ -285,27 +286,70 @@ export const DeleteSingleBundle = async (req) => {
         status: 400,
       };
     }
-    executeShopifyQueries({});
+
+    // remove the product from bq, delete the product from merchant, delete the product from marketplace and mark the product as deleted.
+
     try {
-      await Promise.all([
-        Bundles.findByIdAndDelete(bundleId),
-        executeShopifyQueries({
-          query: DELETE_PRODUCT,
-          accessToken: store.accessToken,
-          callback: null,
-          storeUrl: store.storeUrl,
-          variables: {
-            productId: bundle.shopifyProductId,
-          },
-        }),
-      ]);
-    } catch (e) {
+      await executeShopifyQueries({
+        query: DELETE_PRODUCT,
+        storeUrl: marketPlace.storeUrl,
+        accessToken: marketPlace.accessToken,
+        variables: {
+          productId: bundle.shopifyProductId,
+        },
+      });
+    } catch (error) {
       logger(
         "error",
-        "[delete-single-bundle] Error deleting from both shopify and db",
-        e,
+        "[delete-single-bundle] Error deleting product from marketPlace store",
+        error,
       );
     }
+
+    try {
+      await executeShopifyQueries({
+        query: DELETE_PRODUCT,
+        storeUrl: store.storeUrl,
+        accessToken: store.accessToken,
+        variables: {
+          productId: bundle.metadata.vendorShopifyId,
+        },
+      });
+    } catch (error) {
+      logger(
+        "error",
+        "[delete-single-bundle] Error deleting product from vendor store",
+        error,
+      );
+    }
+
+    try {
+      await Bundles.findByIdAndUpdate(bundleId, {
+        isDeleted: true,
+        deletedAt: new Date(Date.now()).toISOString(),
+      });
+    } catch (error) {
+      logger(
+        "error",
+        "[delete-single-bundle] Error updating bundle deletion status",
+        error,
+      );
+    }
+
+    try {
+      const searchQuery = `
+    DELETE FROM  ${"`"}${process.env.GCP_PROJECT_ID}.${process.env.GCP_BQ_DATA_SET_ID}.${process.env.GCP_EMBEDDINGS_TABLE}${"`"} 
+    WHERE id = '${bundleId}'
+  `;
+      await bigQueryClient.executeQuery(searchQuery);
+    } catch (error) {
+      logger(
+        "error",
+        "[delete-single-bundle] Error deleting bundle from BigQuery",
+        error,
+      );
+    }
+
     return {
       message: "Bundle deleted successfully",
       status: 204,
@@ -481,6 +525,9 @@ export const UpdateBundle = async (req) => {
         status: 400,
       };
     }
+
+    // TODO: Figure out logic to update the products and options.
+
     // const bundleComponents = [];
     // const productIds = components.map((p) => p.productId);
 
