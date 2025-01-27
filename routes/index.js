@@ -17,6 +17,7 @@ import StoreDetailsRoutes from "./storeDetails/index.js";
 import MediaRoutes from "./media/index.js";
 import ChatRoutes from "./chat/index.js";
 import CartRoutes from "./carts/index.js";
+import SellerApplicationRoutes from "./sellerApplication/index.js";
 
 const RouteHandler = Router();
 
@@ -38,6 +39,7 @@ export default () => {
   RouteHandler.use("/media", MediaRoutes());
   RouteHandler.use("/chat", ChatRoutes());
   RouteHandler.use("/cart", CartRoutes());
+  RouteHandler.use("/seller-applications", SellerApplicationRoutes());
 
   return RouteHandler;
 };
