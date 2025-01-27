@@ -48,13 +48,11 @@ export const GetStoreBoxInventory = async (req) => {
 
 export const GetStoreBoxInventoryWithStoreId = async (req) => {
   try {
-    const { storeUrl } = req.query;
-    if (!storeUrl) {
-      throw new Error("Store url not provided");
+    const { id } = req.params;
+    if (!id) {
+      throw new Error("Store id not provided");
     }
-    const store = await Stores.findOne({
-      storeUrl,
-    });
+    const store = await Stores.findById(id);
     if (!store) {
       throw new Error("Store not found");
     }
