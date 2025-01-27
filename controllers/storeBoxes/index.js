@@ -45,3 +45,34 @@ export const GetStoreBoxInventory = async (req) => {
     };
   }
 };
+
+export const GetStoreBoxInventoryWithStoreId = async (req) => {
+  try {
+    const { storeUrl } = req.query;
+    if (!storeUrl) {
+      throw new Error("Store url not provided");
+    }
+    const store = await Stores.findOne({
+      storeUrl,
+    });
+    if (!store) {
+      throw new Error("Store not found");
+    }
+    const storeBoxInventory = await StoreBoxes.findOne({ store: store._id })
+      .populate({
+        path: "inventory.box",
+      })
+      .lean();
+
+    return {
+      data: storeBoxInventory,
+      status: 200,
+      message: "successfully fetched the storebox inventory for the store.",
+    };
+  } catch (e) {
+    return {
+      status: 500,
+      message: e.message || "Something went wrong",
+    };
+  }
+};
