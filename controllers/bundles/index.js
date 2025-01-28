@@ -434,6 +434,8 @@ export const GetOverview = async (req) => {
       {
         $match: {
           store: store._id,
+          isTemp: false,
+          isDeleted: false,
         },
       },
       {
@@ -670,6 +672,8 @@ export const FetchInventoryOverview = async (req) => {
       {
         $match: {
           store: store._id,
+          isDeleted: false,
+          isTemp: false,
         },
       },
       {
