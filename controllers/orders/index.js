@@ -17,7 +17,7 @@ export const GetOrders = async (req) => {
     }
     const { page } = req.query;
     const limit = 10;
-    const skip = (Number(page) - 1) * 10;
+    const skip = (Number(page) - 1) * limit;
 
     const orders = await Orders.find({
       store: store._id,
