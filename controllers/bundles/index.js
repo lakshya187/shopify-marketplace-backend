@@ -5,7 +5,9 @@ import Categories from "#schemas/categories.js";
 import GoogleBigQuery from "#common-functions/big-query/index.js";
 import executeShopifyQueries from "#common-functions/shopify/execute.js";
 import {
+  CREATE_PRODUCT_OPTIONS,
   DELETE_PRODUCT,
+  DELETE_PRODUCT_OPTIONS,
   GET_PRODUCT_DETAILS,
   GET_PRODUCT_MEDIA,
   GET_PRODUCT_VARIANTS_INVENTORY,
@@ -13,6 +15,7 @@ import {
   INVENTORY_ADJUST_QUANTITIES,
   PRODUCT_DELETE_MEDIA,
   PRODUCT_VARIANT_BULK_UPDATE,
+  PRODUCT_VARIANTS_CREATE,
   STAGED_UPLOADS_CREATE,
   UPDATE_PRODUCT_WITH_NEW_MEDIA,
 } from "#common-functions/shopify/queries.js";
@@ -494,6 +497,7 @@ export const UpdateBundle = async (req) => {
       vendor: vendorName,
       sku,
       compareAtPrice,
+      options,
     } = req.body;
     const { user } = req;
     const { id } = req.params;
@@ -530,40 +534,40 @@ export const UpdateBundle = async (req) => {
 
     // TODO: Figure out logic to update the products and options.
 
-    // const bundleComponents = [];
-    // const productIds = components.map((p) => p.productId);
+    const bundleComponents = [];
+    const productIds = components.map((p) => p.productId);
 
-    // const bundleProducts = await Products.find({
-    //   _id: { $in: productIds },
-    // }).lean();
-    // const bundleProductMap = covertArrayToMap("_id", bundleProducts);
-    // const products = await Promise.all(
-    //   components
-    //     .map(async (productObj) => {
-    //       const product = bundleProductMap[productObj.productId];
-    //       if (!product) {
-    //         return null;
-    //       }
-    //       const isVariantValid = product.variants.find(
-    //         (v) => v.id === productObj.variantId,
-    //       );
+    const bundleProducts = await Products.find({
+      _id: { $in: productIds },
+    }).lean();
+    const bundleProductMap = covertArrayToMap("_id", bundleProducts);
+    const products = await Promise.all(
+      components
+        .map(async (productObj) => {
+          const product = bundleProductMap[productObj.productId];
+          if (!product) {
+            return null;
+          }
+          const isVariantValid = product.variants.find(
+            (v) => v.id === productObj.variantId,
+          );
 
-    //       if (product && isVariantValid) {
-    //         const dimensions = {
-    //           length: productObj.dimensions.length,
-    //           weight: productObj.dimensions.weight,
-    //           width: productObj.dimensions.width,
-    //           height: productObj.dimensions.height,
-    //         };
-    //         bundleComponents.push({
-    //           product: product._id,
-    //           variant: isVariantValid,
-    //         });
-    //         return Products.findByIdAndUpdate(product._id, dimensions);
-    //       }
-    //     })
-    //     .filter(Boolean),
-    // );
+          if (product && isVariantValid) {
+            const dimensions = {
+              length: productObj.dimensions.length,
+              weight: productObj.dimensions.weight,
+              width: productObj.dimensions.width,
+              height: productObj.dimensions.height,
+            };
+            bundleComponents.push({
+              product: product._id,
+              variant: isVariantValid,
+            });
+            return Products.findByIdAndUpdate(product._id, dimensions);
+          }
+        })
+        .filter(Boolean),
+    );
     const doesCategoryExists = await Categories.findById(category);
     if (!doesCategoryExists) {
       return {
@@ -571,17 +575,16 @@ export const UpdateBundle = async (req) => {
         status: 400,
       };
     }
-    // if (components.length !== products.length) {
-    //   return {
-    //     message: "Not all the product ids provided are valid",
-    //     status: 400,
-    //   };
-    // }
+    if (components.length !== products.length) {
+      return {
+        message: "Not all the product ids provided are valid",
+        status: 400,
+      };
+    }
 
     const bundleUpdateObj = {
       price,
       tags,
-
       costOfGoods,
       images,
       coverImage,
@@ -593,9 +596,10 @@ export const UpdateBundle = async (req) => {
       category,
       box,
       sku,
-      // components: bundleComponents,
+      components: bundleComponents,
       vendor: vendorName,
       compareAtPrice,
+      options,
     };
 
     // update the bundle on merchant, marketplace, db
@@ -605,6 +609,9 @@ export const UpdateBundle = async (req) => {
       .populate("category")
       .populate({ path: "components.product" })
       .populate("box")
+      .populate({
+        path: "options.product",
+      })
       .lean();
 
     const storeDetails = await StoreDetails.findOne({
@@ -618,11 +625,10 @@ export const UpdateBundle = async (req) => {
         message: "Bundle updated successfully",
       };
     }
-    const marketPlace = updateProduct({
+    const marketPlace = await updateProduct({
       accessToken: internalStore.accessToken,
       shopName: internalStore.shopName,
       bundle: updatedBundle,
-      // products: products,
       productId: doesBundleExists.shopifyProductId,
       inventoryDelta,
       storeUrl: internalStore.storeUrl,
@@ -630,19 +636,36 @@ export const UpdateBundle = async (req) => {
     });
     let vendor;
     if (doesBundleExists.metadata?.vendorShopifyId) {
-      vendor = updateProduct({
+      vendor = await updateProduct({
         accessToken: store.accessToken,
         shopName: store.shopName,
         bundle: updatedBundle,
         productId: doesBundleExists.metadata.vendorShopifyId,
-        // products: products,
+
         inventoryDelta,
         storeUrl: store.storeUrl,
         isVendorProduct: true,
         storeLogo: storeDetails.logo,
       });
     }
-    await Promise.all([marketPlace, vendor]);
+    const variantMapping = {};
+    marketPlace.variantMapping.forEach((mVariant) => {
+      const vendorVariant = vendor.variantMapping.find(
+        (vVariant) => vVariant.title === mVariant.title,
+      );
+      if (vendorVariant) {
+        variantMapping[mVariant.id] = vendorVariant;
+      }
+    });
+
+    const newMetaData = { ...updatedBundle.metadata };
+
+    newMetaData.variantMapping = variantMapping;
+
+    await Bundles.findByIdAndUpdate(updatedBundle._id, {
+      metadata: newMetaData,
+    });
+
     return {
       status: 200,
       message: "Bundle updated successfully on merchant and marketplace.",
@@ -815,7 +838,9 @@ const updateProduct = async ({
   isVendorProduct,
   storeLogo,
 }) => {
+  // removing the existing media.
   let allMediaIds;
+
   try {
     allMediaIds = await executeShopifyQueries({
       accessToken,
@@ -848,6 +873,7 @@ const updateProduct = async ({
   } catch (e) {
     logger("error", "[update-product] Could not delete the product media", e);
   }
+  // fetching the existing product for meta fields  TODO: Refactor this.
   let productDetails;
   try {
     productDetails = await executeShopifyQueries({
@@ -865,6 +891,7 @@ const updateProduct = async ({
               description: node.value,
             };
           }),
+          optionIds: product?.options.map((option) => option.id),
         };
       },
       storeUrl,
@@ -872,36 +899,169 @@ const updateProduct = async ({
         id: productId,
       },
     });
+    logger("info", "Successfully fetched the product details");
   } catch (e) {
     logger("error", "[update-product] Could not fetch the product details", e);
+    throw e;
   }
-  const componentField = productDetails.metafields.find((field) => {
-    return field.key === "bundle_components";
-  });
-  const box = {};
-  if (bundle.box) {
-    box["price"] = bundle.box.price;
-    box["size"] = bundle.box.sizes.size;
-  }
-  let upsertComponentObj = {};
-  if (componentField) {
-    upsertComponentObj["id"] = componentField.id;
-    upsertComponentObj["value"] = JSON.stringify({
-      products: bundle.components,
-      box,
-      storeLogo,
-    });
-  } else {
-    upsertComponentObj["namespace"] = "custom";
-    upsertComponentObj["key"] = "bundle_components";
-    upsertComponentObj["value"] = JSON.stringify({
-      products: bundle.components,
-      box,
-      storeLogo,
-    });
-    upsertComponentObj["type"] = "json_string";
+  if (!productDetails) {
+    throw new Error("[update-product] Could not fetch the product details");
   }
 
+  // delete the current product options
+  try {
+    await executeShopifyQueries({
+      accessToken,
+      query: DELETE_PRODUCT_OPTIONS,
+      storeUrl,
+      variables: {
+        productId: productId,
+        options: productDetails.optionIds,
+        strategy: "POSITION",
+      },
+    });
+    logger("info", "Successfully deleted the existing variants");
+  } catch (e) {
+    logger("error", "[update-product] Could not delete the product options", e);
+  }
+
+  // updating the existing product with new media and updated
+  let product;
+  try {
+    product = await executeShopifyQueries({
+      accessToken,
+      query: UPDATE_PRODUCT_WITH_NEW_MEDIA,
+      storeUrl,
+      variables: {
+        input: {
+          id: productId,
+          title: bundle.name,
+          descriptionHtml: bundle.description,
+          tags: bundle.tags || [],
+          vendor: bundle.vendor ?? "",
+          status: isVendorProduct ? "DRAFT" : bundle.status?.toUpperCase(),
+          category: bundle.category?.category?.id,
+          metafields: [
+            buildProductMetaObj({
+              productDetails,
+              bundle,
+              storeLogo,
+              storeId: bundle.store._id,
+            }),
+          ],
+        },
+        media: buildMediaObject(bundle),
+      },
+      callback: (result) => {
+        return result.data.productUpdate.product;
+      },
+    });
+    logger("info", "[update-product] Successfully updated the product");
+  } catch (e) {
+    logger("error", "[update-product] Could not update the product", e);
+  }
+
+  // creating new product variants
+  const productOptionsObj = buildOptionsObjs(bundle.options);
+  try {
+    await executeShopifyQueries({
+      query: CREATE_PRODUCT_OPTIONS,
+      accessToken,
+      storeUrl,
+      variables: {
+        productId: productId,
+        options: productOptionsObj,
+      },
+    });
+  } catch (e) {
+    logger("error", "[update-product] Could not create product options");
+    throw e;
+  }
+  // creating new product options
+  const possibleOptions = generateAllCombinations({
+    options: productOptionsObj,
+  });
+
+  const variantObjs = buildVariantObjs({
+    combinations: possibleOptions.slice(1),
+    compareAtPrice: bundle.compareAtPrice,
+    price: bundle.price,
+  });
+
+  if (variantObjs.length) {
+    try {
+      await executeShopifyQueries({
+        accessToken,
+        query: PRODUCT_VARIANTS_CREATE,
+        storeUrl,
+        variables: {
+          productId: product.id,
+          variants: variantObjs,
+        },
+      });
+      logger("info", "Successfully created new variants");
+    } catch (e) {
+      logger(
+        "error",
+        `[update-product] Could add the product packaging option`,
+        e,
+      );
+    }
+  }
+  const defaultVariant = product.variants?.edges?.[0]?.node;
+  // update the default variant
+  try {
+    await executeShopifyQueries({
+      query: PRODUCT_VARIANT_BULK_UPDATE,
+      accessToken,
+      storeUrl,
+      variables: {
+        productId: product.id,
+        variants: {
+          id: defaultVariant.id,
+          price: bundle.price,
+          compareAtPrice: bundle.compareAtPrice,
+          inventoryPolicy: "CONTINUE",
+        },
+      },
+    });
+  } catch (e) {
+    logger("error", "[update-product] Could not update the default variant");
+    throw e;
+  }
+
+  const variantMapping = [];
+  try {
+    await executeShopifyQueries({
+      accessToken,
+      query: GET_PRODUCT_DETAILS,
+      storeUrl,
+      variables: {
+        id: product.id,
+      },
+      callback: (result) => {
+        const product = result?.data?.product;
+        return {
+          variants: product.variants.edges.map(({ node }) => {
+            variantMapping.push({
+              id: node.id,
+              title: node.title,
+            });
+          }),
+        };
+      },
+    });
+    logger("info", "Successfully fetched the product variants");
+  } catch (e) {
+    logger("error", `[update-product] Could fetch the product variants`, e);
+    throw e;
+  }
+  return {
+    variantMapping,
+  };
+};
+
+const buildMediaObject = (bundle) => {
   const media = [];
   if (bundle.coverImage) {
     media.push({
@@ -919,141 +1079,89 @@ const updateProduct = async ({
       });
     });
   }
-  const category = {};
-  if (bundle?.category?.category?.id) {
-    category["category"] = bundle.category.category.id;
-  }
-  let product;
-  try {
-    product = await executeShopifyQueries({
-      accessToken,
-      query: UPDATE_PRODUCT_WITH_NEW_MEDIA,
-      storeUrl,
-      variables: {
-        input: {
-          id: productId,
-          title: bundle.name,
-          descriptionHtml: bundle.description,
-          tags: bundle.tags || [],
-          vendor: bundle.vendor ?? "",
-          status: isVendorProduct ? "DRAFT" : bundle.status?.toUpperCase(),
-          ...category,
-          // metafields: [upsertComponentObj],
-        },
-        media: media,
-      },
-      callback: (result) => {
-        return result.data.productUpdate.product;
-      },
-    });
-    logger("info", "[update-product] Successfully updated the product");
-  } catch (e) {
-    logger("error", "[update-product] Could not update the product", e);
-  }
-  const skuObj = {};
-  if (bundle.sku) {
-    skuObj["sku"] = bundle.sku;
-  }
-  let inventoryPolicy = "";
-  if (bundle.trackInventory) {
-    inventoryPolicy = "DENY";
-  } else {
-    inventoryPolicy = "CONTINUE";
-  }
+  return media;
+};
 
-  const variantIds = [];
-  const variants = product.variants.edges.map(({ node }) => {
-    // const  = node.title === BUNDLE_PACKAGING_VARIANT;
-    variantIds.push(node.id);
+const buildProductMetaObj = ({
+  productDetails,
+  bundle,
+  storeLogo,
+  storeId,
+}) => {
+  const componentField = productDetails.metafields.find(
+    (field) => field.key === "bundle_components",
+  );
+
+  const box = bundle.box
+    ? {
+        price: bundle.box.price,
+        size: bundle.box.sizes.size,
+      }
+    : {};
+
+  const baseValue = JSON.stringify({
+    products: bundle.components,
+    box,
+    storeLogo,
+    storeId,
+  });
+
+  return componentField
+    ? { id: componentField.id, value: baseValue }
+    : {
+        namespace: "custom",
+        key: "bundle_components",
+        value: baseValue,
+        type: "json_string",
+      };
+};
+
+const buildOptionsObjs = (options) => {
+  const allOptions = [];
+  if (options && options.length) {
+    options.forEach((bundleOption) => {
+      const { title: productName } = bundleOption.product;
+      bundleOption.options.forEach((option) => {
+        const optionName = `${productName} ${option.name}`;
+        const values = option.values.map((v) => {
+          return { name: v };
+        });
+        allOptions.push({
+          name: optionName,
+          values: values,
+        });
+      });
+    });
+  }
+  return allOptions;
+};
+
+const buildVariantObjs = ({ combinations, price, compareAtPrice }) => {
+  return combinations.map((comb) => {
     return {
-      id: node.id,
-      compareAtPrice: bundle.compareAtPrice,
-      price: bundle.price,
-      // inventoryItem: {
-      //   tracked: bundle.trackInventory,
-      //   sku: isPackaging ? `${bundle.sku}_P` : bundle.sku,
-      // },
-      // inventoryPolicy,
+      optionValues: comb,
+      price,
+      inventoryPolicy: "CONTINUE",
+      compareAtPrice,
     };
   });
-  try {
-    await executeShopifyQueries({
-      accessToken,
-      storeUrl,
-      variables: {
-        productId,
-        variants,
-      },
-      query: PRODUCT_VARIANT_BULK_UPDATE,
-      callback: null,
-    });
-    logger("info", "Successfully Updated the product variant");
-  } catch (e) {
-    logger("error", "[update-product] Could not update the product variant");
-  }
-  // let locations;
-  // let location;
-  // try {
-  //   locations = await executeShopifyQueries({
-  //     accessToken,
-  //     query: GET_STORE_LOCATION,
-  //     storeUrl,
-  //     callback: (result) => result.data.locations.edges,
-  //   });
-  //   logger("info", "Successfully fetched the store locations");
-  // } catch (e) {
-  //   logger("error", "[update-product] Could not fetch the store locations");
-  // }
-  // const defaultLocation = locations.find(
-  //   (l) => l.node.name === "Shop location",
-  // );
-  // if (!defaultLocation) {
-  //   location = locations[0].node.id;
-  // } else {
-  //   location = defaultLocation.node.id;
-  // }
-  // let inventoryIds;
-  // try {
-  //   inventoryIds = await executeShopifyQueries({
-  //     accessToken,
-  //     storeUrl,
-  //     variables: {
-  //       variantIds: variantIds,
-  //     },
-  //     query: GET_PRODUCT_VARIANTS_INVENTORY,
-  //     callback: (result) => {
-  //       return result?.data?.nodes.map((obj) => {
-  //         return {
-  //           delta: inventoryDelta,
-  //           inventoryItemId: obj.inventoryItem.id,
-  //           locationId: location,
-  //         };
-  //       });
-  //     },
-  //   });
-  // } catch (e) {
-  //   logger("error", "[update-product] Could not fetch the product variant", e);
-  // }
+};
 
-  // try {
-  //   await executeShopifyQueries({
-  //     accessToken,
-  //     storeUrl,
-  //     variables: {
-  //       input: {
-  //         reason: "correction",
-  //         name: "available",
-  //         changes: inventoryIds,
-  //       },
-  //     },
-  //     query: INVENTORY_ADJUST_QUANTITIES,
-  //     callback: null,
-  //   });
-  // } catch (e) {
-  //   logger(
-  //     "error",
-  //     "[update-product] Could not update the inventory of the variant ",
-  //     e,
-  //   );
-  // }
+const generateAllCombinations = ({ options }) => {
+  // Map options into arrays of their values with associated names
+  const mappedOptions = options.map((option) =>
+    option.values.map((value) => ({
+      name: value.name,
+      optionName: option.name,
+    })),
+  );
+  // Compute Cartesian Product of all options
+  return cartesianProduct(mappedOptions);
+};
+
+const cartesianProduct = (arr) => {
+  return arr.reduce(
+    (acc, curr) => acc.flatMap((x) => curr.map((y) => [...x, y])),
+    [[]],
+  );
 };
