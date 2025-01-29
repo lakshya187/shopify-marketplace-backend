@@ -181,7 +181,7 @@ export const CreateCart = async (req) => {
               return targetPublication ? targetPublication.node : null;
             },
           });
-          logger("successfully fetched the publications");
+          logger("info", "successfully fetched the publications");
         } catch (e) {
           logger(
             "error",
@@ -208,6 +208,7 @@ export const CreateCart = async (req) => {
           });
         } catch (e) {
           logger("error", "[create-cart] Could not publish the product");
+          throw e;
         }
 
         const newBundle = await Bundles.create({
@@ -248,11 +249,15 @@ export const CreateCart = async (req) => {
       // add the product in lineItems
       // if the product is not packaging then add the product as it is in the lineItems
     }
+    const emailObj = {};
+    if (userEmail) {
+      emailObj["buyerIdentity"] = {
+        email: userEmail,
+      };
+    }
     const createCartPayload = {
       input: {
-        buyerIdentity: {
-          email: userEmail,
-        },
+        ...emailObj,
         lines: lineItems,
       },
     };
@@ -279,7 +284,6 @@ export const CreateCart = async (req) => {
       logger(
         "error",
         "[create-cart] Could not create the cart for user " + userEmail,
-        e,
       );
       throw new Error("Could not create the cart for the user");
     }

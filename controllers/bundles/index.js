@@ -532,8 +532,6 @@ export const UpdateBundle = async (req) => {
       };
     }
 
-    // TODO: Figure out logic to update the products and options.
-
     const bundleComponents = [];
     const productIds = components.map((p) => p.productId);
 
