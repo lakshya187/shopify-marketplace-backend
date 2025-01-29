@@ -1090,16 +1090,9 @@ const buildProductMetaObj = ({
     (field) => field.key === "bundle_components",
   );
 
-  const box = bundle.box
-    ? {
-        price: bundle.box.price,
-        size: bundle.box.sizes.size,
-      }
-    : {};
-
   const baseValue = JSON.stringify({
     products: bundle.components,
-    box,
+    box: bundle.box,
     storeLogo,
     storeId,
   });
