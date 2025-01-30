@@ -141,6 +141,7 @@ export const UpdateStoreBoxOrder = async (req) => {
       .populate({
         path: "orderItems.box",
       })
+      .populate("store")
       .lean();
 
     if (!doesBoxOrderExists) {
@@ -152,6 +153,7 @@ export const UpdateStoreBoxOrder = async (req) => {
     const [storeBoxInventory] = await StoreBoxes.find({
       store: doesBoxOrderExists.store,
     }).lean();
+    // const store = await Stores.findById(doesBoxOrderExists)
 
     if (status === "delivered") {
       let storeBoxPromise = null;
@@ -224,10 +226,10 @@ export const UpdateStoreBoxOrder = async (req) => {
           status: "delivered",
         }),
         updateShopify({
-          storeId: store._id,
-          accessToken: store.accessToken,
+          storeId: doesBoxOrderExists.store._id,
+          accessToken: doesBoxOrderExists.store.accessToken,
           inventory: storeBoxInventoryUpdate.inventory,
-          storeUrl: store.storeUrl,
+          storeUrl: doesBoxOrderExists.store.storeUrl,
         }),
       ]);
     }
@@ -465,14 +467,18 @@ const updateShopify = async ({ storeId, accessToken, storeUrl, inventory }) => {
       // update the variant with the inventory
     }
   }
-  await StoreBoxes.findOneAndUpdate(
-    {
-      store: storeId,
-    },
-    {
-      inventory,
-    },
-  );
+  try {
+    await StoreBoxes.findOneAndUpdate(
+      {
+        store: storeId,
+      },
+      {
+        inventory,
+      },
+    );
+  } catch (e) {
+    console.log(e);
+  }
 };
 
 const adjustShopifyInventory = async ({

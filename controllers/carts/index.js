@@ -11,6 +11,7 @@ import executeShopifyQueries from "#common-functions/shopify/execute.js";
 import executeShopifyStorefrontQueries from "#common-functions/shopify/executeStoreFront.js";
 import Stores from "#schemas/stores.js";
 import Bundles from "#schemas/bundles.js";
+import StoreBoxes from "#schemas/storeBoxes.js";
 
 /*
   {
@@ -37,6 +38,9 @@ export const CreateCart = async (req) => {
         status: 404,
       };
     }
+    const storeInventory = await StoreBoxes.findOne({
+      store: marketplace._id,
+    }).lean();
     const lineItems = [];
     for (const product of products) {
       // check if product is packaging or not
@@ -63,187 +67,35 @@ export const CreateCart = async (req) => {
         if (!isBundlePresentOnDb) {
           throw new Error("The product is invalid.");
         }
-        const newProductVariables = {
-          input: {
-            title: `${isBundlePresentOnDb.name} ${shopifyProductVariant.title} With giftbox`,
-            descriptionHtml: `This product is auto generated for ${shopifyProductVariant.title}`,
-            tags: ["auto-generated"],
-            status: "ACTIVE",
-            vendor: isBundlePresentOnDb.vendor,
-            productOptions: [
-              {
-                name: "Default",
-                values: [
-                  { name: `${shopifyProductVariant.title} With giftbox` },
-                ],
-              },
-            ],
-            metafields: [
-              {
-                namespace: "custom",
-                key: "original_product",
-                value: JSON.stringify({
-                  variantId: product.variantId,
-                  productId: shopifyProductVariant.productId,
-                  box: isBundlePresentOnDb.box._id,
-                }),
-                type: "json_string",
-              },
-            ],
-          },
-          media: [],
-        };
-        if (isBundlePresentOnDb.coverImage) {
-          newProductVariables.media.push({
-            mediaContentType: "IMAGE",
-            originalSource: isBundlePresentOnDb.coverImage.url,
-            alt: `Cover image for ${isBundlePresentOnDb.name}`,
-          });
-        }
-
-        let newProduct;
-        try {
-          newProduct = await executeShopifyQueries({
-            query: CREATE_PRODUCT_WITH_MEDIA,
-            accessToken: marketplace.accessToken,
-            callback: (result) => {
-              return result.data?.productCreate?.product;
-            },
-            storeUrl: marketplace.storeUrl,
-            variables: newProductVariables,
-          });
-
-          logger("info", "Successfully created the product on the store");
-        } catch (e) {
-          logger("error", `[create-cart] Could not create store product`, e);
-          throw new Error(e);
-        }
-
-        if (!newProduct) {
-          logger("error", "[create-cart] Could not create a new product ", e);
-          throw new Error("Could not create a new product on the marketplace");
-        }
-
-        const newVariant = newProduct.variants?.edges[0]?.node;
-        if (!newVariant) {
-          logger(
-            "error",
-            "[create-cart] Could not find the new product variant",
-          );
-          throw new Error("Could not find the new product variant");
-        }
-
-        const variantUpdatePayload = {
-          productId: newProduct.id,
-          variants: [
-            {
-              id: newVariant.id,
-              price:
-                Number(shopifyProductVariant.price) +
-                  Number(isBundlePresentOnDb.box?.price) ?? 0,
-            },
-          ],
-        };
-
-        try {
-          await executeShopifyQueries({
-            variables: variantUpdatePayload,
-            accessToken: marketplace.accessToken,
-            callback: null,
-            query: PRODUCT_VARIANT_BULK_UPDATE,
-            storeUrl: marketplace.storeUrl,
-          });
-        } catch (e) {
-          logger(
-            "error",
-            "[create-cart] Could not update the new product variant",
-          );
-          throw e;
-        }
-        // publish product on the storefront app.
-        let storefrontPublish;
-        try {
-          storefrontPublish = await executeShopifyQueries({
-            accessToken: marketplace.accessToken,
-            query: GET_PUBLICATIONS,
-            storeUrl: marketplace.storeUrl,
-            callback: (result) => {
-              const publications = result.data?.publications?.edges;
-
-              if (!publications || publications.length === 0) {
-                return null;
-              }
-
-              const targetPublication = publications.find(
-                (edge) =>
-                  edge.node.name === process.env.SHOPIFY_STORE_FRONT_APP_NAME,
-              );
-
-              return targetPublication ? targetPublication.node : null;
-            },
-          });
-          logger("info", "successfully fetched the publications");
-        } catch (e) {
-          logger(
-            "error",
-            "[create-cart] Could not fetch the store front publications",
-          );
-          throw e;
-        }
-
-        if (!storefrontPublish) {
-          throw new Error(
-            "[create-cart] Could not fetch the storefront publications",
-          );
-        }
-
-        try {
-          await executeShopifyQueries({
-            accessToken: marketplace.accessToken,
-            storeUrl: marketplace.storeUrl,
-            query: PUBLISH_PRODUCT,
-            variables: {
-              productId: newProduct.id,
-              publicationId: storefrontPublish.id,
-            },
-          });
-        } catch (e) {
-          logger("error", "[create-cart] Could not publish the product");
-          throw e;
-        }
-
-        const newBundle = await Bundles.create({
-          name: `${shopifyProductVariant.title} With giftbox`,
-          description: `This Temp product is auto generated for ${shopifyProductVariant.title}`,
-          tags: ["auto-generated"],
-          status: "draft",
-          shopifyProductId: newProduct.id,
-          vendor: "marketplace",
-          price:
-            Number(shopifyProductVariant.price) +
-              Number(isBundlePresentOnDb.box.price) ?? 0,
-          store: isBundlePresentOnDb.store,
-          isTemp: true,
-        });
-        if (!newBundle) {
-          logger("error", "Could not save the temporary product on the db.");
-          throw new Error("Could not save the temporary product on the db.");
-        }
-
+        const box = storeInventory.inventory.find(
+          (inv) =>
+            inv.box.toString() === isBundlePresentOnDb.box._id.toString(),
+        );
         lineItems.push({
-          merchandiseId: newVariant.id,
-          quantity: product.quantity || 1,
+          merchandiseId: product.variantId,
+          quantity: product.quantity,
+          attributes: [{ key: "packaging", value: "true" }],
         });
+        if (box && box.remaining) {
+          lineItems.push({
+            merchandiseId: box.shopify?.variantId,
+            quantity: product.quantity,
+            // attributes: [{ key: "ignore", value: "true" }],
+          });
+        }
       } else {
         const shopifyProductVariant = await fetchProductBasedOffVariant({
           accessToken: marketplace.accessToken,
           storeUrl: marketplace.storeUrl,
           variantId: product.variantId,
         });
-
+        if (!shopifyProductVariant) {
+          throw new Error("invalid variant id provided");
+        }
         lineItems.push({
           merchandiseId: shopifyProductVariant.id,
           quantity: product.quantity,
+          attributes: [{ key: "packaging", value: "false" }],
         });
       }
       // if the product is packaging create a new product with the packaging price + bundle price.
