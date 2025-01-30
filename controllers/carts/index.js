@@ -69,6 +69,7 @@ export const CreateCart = async (req) => {
             descriptionHtml: `This product is auto generated for ${shopifyProductVariant.title}`,
             tags: ["auto-generated"],
             status: "ACTIVE",
+            vendor: isBundlePresentOnDb.vendor,
             productOptions: [
               {
                 name: "Default",
