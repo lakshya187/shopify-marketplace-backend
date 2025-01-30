@@ -175,6 +175,8 @@ export const CreateCoupon = async (req) => {
       couponObj["shopifyId"] = shopifyCoupon.id;
       if (couponObj.appliesTo === "all") {
         delete couponObj.bundleIds;
+      } else {
+        couponObj.bundleIds = bundleIds;
       }
       const coupon = new Coupons(couponObj);
       const savedCoupon = await coupon.save();
