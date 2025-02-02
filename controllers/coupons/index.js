@@ -80,7 +80,11 @@ export const CreateCoupon = async (req) => {
     };
 
     // finding the products based off weather the user has selected products or all as applies to.
-    const bundleFilter = { isCreatedOnShopify: true };
+    const bundleFilter = {
+      isCreatedOnShopify: true,
+      isDeleted: false,
+      isTemp: false,
+    };
     if (appliesTo === "all") {
       bundleFilter["store"] = store._id;
     } else if (appliesTo === "products") {

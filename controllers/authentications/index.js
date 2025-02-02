@@ -31,7 +31,7 @@ export async function RedirectToShopifyAuth(req) {
       storeUrl: shop,
     }).lean();
 
-    if (authentication) {
+    if (authentication && storeExistence.isActive) {
       // Redirect to login page
       return {
         redirect: true,
@@ -109,7 +109,7 @@ export async function ShopifyAuthCallback(req) {
     storeUrl: shop,
   }).lean();
 
-  if (authExistence) {
+  if (authExistence && storeExistence.isActive) {
     // update store and return to login page
     return {
       redirect: true,
