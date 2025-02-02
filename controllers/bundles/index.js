@@ -10,9 +10,6 @@ import {
   DELETE_PRODUCT_OPTIONS,
   GET_PRODUCT_DETAILS,
   GET_PRODUCT_MEDIA,
-  GET_PRODUCT_VARIANTS_INVENTORY,
-  GET_STORE_LOCATION,
-  INVENTORY_ADJUST_QUANTITIES,
   PRODUCT_DELETE_MEDIA,
   PRODUCT_VARIANT_BULK_UPDATE,
   PRODUCT_VARIANTS_CREATE,
@@ -21,7 +18,6 @@ import {
 } from "#common-functions/shopify/queries.js";
 import logger from "#common-functions/logger/index.js";
 import StoreDetails from "#schemas/storeDetails.js";
-import { BUNDLE_PACKAGING_VARIANT } from "#constants/global.js";
 
 const bigQueryClient = new GoogleBigQuery(process.env.GCP_PROJECT_ID);
 

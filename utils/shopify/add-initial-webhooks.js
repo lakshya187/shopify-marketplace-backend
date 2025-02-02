@@ -13,6 +13,7 @@ const INITIAL_WEBHOOKS = [
   "products/create",
   "products/delete",
   "products/update",
+  "app/uninstalled",
 ];
 
 // const { PARTNER_EVENT_SOURCE_ARN } = process.env;
