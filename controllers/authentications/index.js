@@ -8,6 +8,7 @@ import PasswordGenerator from "generate-password";
 import { EncryptJWT, DecryptJWT } from "#utils/auth.js";
 import AddInitialWebhooks from "#utils/shopify/add-initial-webhooks.js";
 import RedisEventPublisher from "#common-functions/redis/publish.js";
+import Bundles from "#schemas/bundles.js";
 
 export async function RedirectToShopifyAuth(req) {
   try {
@@ -331,6 +332,7 @@ async function GetStoreAuthToken(storeData, accessToken, eventBridgeARN) {
       provinceCode: storeData.province_code,
       domain: storeData.domain,
       isInternalStore: INTERNAL_STORES.includes(storeData.myshopify_domain),
+      isActive: true,
     },
   );
 
@@ -367,28 +369,61 @@ async function GetStoreAuthToken(storeData, accessToken, eventBridgeARN) {
   }
   logger("info", "Added store's default webhooks");
   let username = storeData.name.split(" ")[0].toLowerCase();
-  const isUserNameTaken = await Authentications.findOne({
-    username: username,
-  });
-  if (isUserNameTaken) {
-    const userNameCounter = username.split("_")[1];
-    if (userNameCounter) {
-      username = `${username}_${Number(userNameCounter) + 1}`;
-    } else {
-      username = `${username}_1`;
-    }
-  }
-
-  const authentication = await Authentications.create({
-    email: storeData.email,
-    name: storeData.shop_owner,
+  // const isUserNameTaken = await Authentications.findOne({
+  //   username: username,
+  // });
+  // if (isUserNameTaken) {
+  //   const userNameCounter = username.split("_")[1];
+  //   if (userNameCounter) {
+  //     username = `${username}_${Number(userNameCounter) + 1}`;
+  //   } else {
+  //     username = `${username}_1`;
+  //   }
+  // }
+  const isAuthAvailable = await Authentications.findOne({
     storeUrl: storeData.myshopify_domain,
-    // eslint-disable-next-line no-underscore-dangle
-    store: store._id,
-    password_salt: salt,
-    password_hash: hash,
-    username,
   });
+  let authentication;
+  if (isAuthAvailable) {
+    authentication = await Authentications.findByIdAndUpdate(
+      isAuthAvailable._id,
+      {
+        email: storeData.email,
+        name: storeData.shop_owner,
+        storeUrl: storeData.myshopify_domain,
+        // eslint-disable-next-line no-underscore-dangle
+        store: store._id,
+        password_salt: salt,
+        password_hash: hash,
+      },
+      {
+        new: true,
+      },
+    );
+    // Activate all the previous bundles
+    await Bundles.updateMany(
+      {
+        store: store._id,
+        status: "active",
+      },
+      {
+        isCreatedOnShopify: false,
+        isCreatedOnBQ: false,
+      },
+    );
+    // Mark the bundles isCreatedOnShopify as false
+  } else {
+    authentication = await Authentications.create({
+      email: storeData.email,
+      name: storeData.shop_owner,
+      storeUrl: storeData.myshopify_domain,
+      // eslint-disable-next-line no-underscore-dangle
+      store: store._id,
+      password_salt: salt,
+      password_hash: hash,
+      username,
+    });
+  }
 
   // publish the message to the queue to send email
   const eventName = "notification";
