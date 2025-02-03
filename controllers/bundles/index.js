@@ -326,6 +326,7 @@ export const DeleteSingleBundle = async (req) => {
       await Bundles.findByIdAndUpdate(bundleId, {
         isDeleted: true,
         deletedAt: new Date(Date.now()).toISOString(),
+        status: "draft",
       });
     } catch (error) {
       logger(
