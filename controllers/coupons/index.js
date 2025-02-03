@@ -52,7 +52,7 @@ export const CreateCoupon = async (req) => {
     }
 
     // Check if the code already exists
-    const existingCoupon = await Coupons.findOne({ code });
+    const existingCoupon = await Coupons.findOne({ code, isDeleted: false });
     if (existingCoupon) {
       return {
         message: "A coupon with the same code already exits.",
