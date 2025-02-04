@@ -112,10 +112,12 @@ export const GetOrdersOverview = async (req) => {
       },
     ]);
     if (data) {
-      data.salesSummary.total_sales = `₹${data.salesSummary?.total_sales}`;
-      data.salesSummary.net_balance = `₹${
-        Number(data.salesSummary?.net_balance) * 0.8
-      }`;
+      data.salesSummary.total_sales = `₹${formatNumber(
+        data.salesSummary?.total_sales,
+      )}`;
+      data.salesSummary.net_balance = `₹${formatNumber(
+        Number(data.salesSummary?.net_balance) * (1 - store.commission / 100),
+      )}`;
     }
 
     return {
@@ -180,4 +182,8 @@ export const CancelOrder = async (req) => {
       message: e,
     };
   }
+};
+
+const formatNumber = (num) => {
+  return num.toLocaleString("en-IN");
 };
