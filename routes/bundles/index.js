@@ -13,6 +13,7 @@ import {
   GET_BUNDLE_INVENTORY_OVERVIEW,
   AI_SEARCH,
   HANDLE_PROMPT,
+  GENERATE_IMAGES,
 } from "../../constants/routes/bundles/index.js";
 import {
   CreateBundle,
@@ -25,6 +26,7 @@ import {
   FetchInventoryOverview,
   AISearch,
   HandleConversation,
+  GenerateImages,
 } from "../../controllers/bundles/index.js";
 import AuthMiddleware from "../../middlewares/authentication.js";
 import ValidateMiddleware from "../../validators/index.js";
@@ -222,6 +224,24 @@ export default () => {
       });
     } catch (error) {
       logger("error", "Error handling prompts", error);
+      return ErrorResponseHandler(
+        req,
+        res,
+        error.message || "Internal server error",
+      );
+    }
+  });
+
+  BundleRoutes.post(GENERATE_IMAGES, async (req, res) => {
+    try {
+      const data = await GenerateImages(req);
+      return SuccessResponseHandler(req, res, {
+        status: data.status,
+        message: data.message,
+        data: data.data,
+      });
+    } catch (error) {
+      logger("error", "Error genreating images ", error);
       return ErrorResponseHandler(
         req,
         res,

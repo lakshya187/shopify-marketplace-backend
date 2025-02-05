@@ -8,3 +8,4 @@ export const UPDATE_BUNDLE = "/:id";
 export const GET_BUNDLE_INVENTORY_OVERVIEW = "/inventory-overview";
 export const AI_SEARCH = "/ai-search";
 export const HANDLE_PROMPT = "/handle-prompt";
+export const GENERATE_IMAGES = "/generate-images";
