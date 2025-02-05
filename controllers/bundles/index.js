@@ -1,3 +1,8 @@
+import fs from "fs";
+import { GoogleAuth } from "google-auth-library";
+import AWS from "aws-sdk";
+import { v4 as uuidv4 } from "uuid";
+
 import Bundles from "#schemas/bundles.js";
 import Stores from "#schemas/stores.js";
 import Products from "#schemas/products.js";
@@ -815,7 +820,134 @@ export const HandleConversation = async (req) => {
   }
 };
 
+export const GenerateImages = async (req) => {
+  try {
+    const { productIds } = req.body;
+    const products = await Products.find({
+      _id: { $in: productIds },
+    }).lean();
+    // const  = await
+    const refinedPromptTemplate = `
+You are an AI specialized in generating detailed and visually appealing prompts for product bundle cover images. 
+Use the following product details to create a single, cohesive prompt that describes a high-quality image for a bundle featuring these items:
+
+${products
+  .map(
+    (product, index) =>
+      `Product ${index + 1}: 
+       - Name: ${product.title} 
+       - Description: ${product.description}`,
+  )
+  .join("\n\n")}
+
+Ensure the prompt is creative, visually descriptive, and accurately represents a bundle containing these products. Also have a background of a giftbox which is of orange color with white ribbon. Dont add any text on the image.
+`;
+    const refinedPrompt = await HandleConversation({
+      body: { prompt: refinedPromptTemplate },
+    });
+
+    const { token } = await getAccessToken();
+
+    // const GOOGLE_PROJECT_ID = ;
+    // const API_URL = `https://${process.env.GCP_LOCATION}-aiplatform.googleapis.com/v1/projects/${process.env.GOOGLE_PROJECT_ID}/locations/${process.env.GCP_LOCATION}/publishers/google/models/imagen-3.0-generate-002:predict`;
+    const API_URL = `https://${process.env.GCP_LOCATION}-aiplatform.googleapis.com/v1/projects/${process.env.GCP_PROJECT_ID}/locations/${process.env.GCP_LOCATION}/publishers/google/models/imagen-3.0-generate-002:predict`;
+    // const referenceImages = await Promise.all(
+    //   products.map(async (product) => {
+    //     const imageUrl = product.images[0].src; // Ensure your DB has image URLs
+    //     const imageBuffer = await fetch(imageUrl).then((res) =>
+    //       res.arrayBuffer(),
+    //     );
+    //     return Buffer.from(imageBuffer).toString("base64");
+    //   }),
+    // );
+    let response;
+
+    try {
+      response = await fetch(API_URL, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          instances: [
+            {
+              prompt: refinedPrompt.data,
+              image_format: "jpeg",
+              aspect_ratio: "1:1",
+              // image: referenceImages.map((base64Image) => ({
+              //   bytesBase64Encoded: base64Image,
+              // })),
+            },
+          ],
+          parameters: {
+            quality: "standard",
+          },
+        }),
+      });
+    } catch (e) {
+      logger("error", "Error when generating images", e);
+    }
+
+    if (!response.ok) {
+      throw new Error(`Error: ${response.status} ${response.statusText}`);
+    }
+
+    const data = await response.json();
+    const imageData = data.predictions[0].bytesBase64Encoded;
+
+    const imgBuffer = Buffer.from(imageData, "base64");
+
+    const fileName = `generated-images/${uuidv4()}.jpg`;
+    const imageUrl = await uploadToS3(imgBuffer, fileName);
+
+    return {
+      status: 201,
+      message: "Successfully generated and uploaded the image",
+      data: imageUrl,
+    };
+  } catch (error) {
+    logger("error", "Error when generating images ", error);
+    throw new Error("Image generation failed");
+  }
+};
+
 //utility functions
+
+async function uploadToS3(imageBuffer, fileName) {
+  const s3 = new AWS.S3({
+    region: process.env.AWS_REGION,
+  });
+
+  const params = {
+    Bucket: process.env.FILE_UPLOAD_BUCKET,
+    Key: fileName,
+    Body: imageBuffer,
+    ContentType: "image/jpeg",
+  };
+
+  return new Promise((resolve, reject) => {
+    s3.upload(params, (err, data) => {
+      if (err) {
+        reject(err);
+      } else {
+        resolve(data.Location);
+      }
+    });
+  });
+}
+
+const getAccessToken = async () => {
+  const auth = new GoogleAuth({
+    keyFilename: process.env.GCP_SERVICE_ACCOUNT_CREDENTIALS,
+    scopes: ["https://www.googleapis.com/auth/cloud-platform"],
+  });
+
+  const client = await auth.getClient();
+  const token = await client.getAccessToken();
+  return token;
+};
 const covertArrayToMap = (key, arr) => {
   const map = {};
   arr.forEach((item) => {
