@@ -847,7 +847,6 @@ Ensure the prompt is creative, visually descriptive, and accurately represents a
     });
 
     const { token } = await getAccessToken();
-    // const token = `ya29.a0AXeO80SJuCUNH8SckGKauoRgHngiXFLU-MikLHMuFqjy0DKGTOR7P3FSfzPS8s0-n2PYn6bGFXiNzItc18j4XHflwqjPjv3hlcl2G_bRWSZgRloni3nciC1PT7rFxqlXqnpwE0L1rIWC9B2GMPKj_ja2u7wczsYY6z91OUTlvwgm6AaCgYKAYISARASFQHGX2MiZd19ajs3K2cDh3dTpWe3CQ0181`;
 
     // const GOOGLE_PROJECT_ID = ;
     // const API_URL = `https://${process.env.GCP_LOCATION}-aiplatform.googleapis.com/v1/projects/${process.env.GOOGLE_PROJECT_ID}/locations/${process.env.GCP_LOCATION}/publishers/google/models/imagen-3.0-generate-002:predict`;
@@ -909,7 +908,7 @@ Ensure the prompt is creative, visually descriptive, and accurately represents a
       data: imageUrl,
     };
   } catch (error) {
-    console.error("Error generating image:", error.response?.data || error);
+    logger("error", "Error when generating images ", error);
     throw new Error("Image generation failed");
   }
 };
