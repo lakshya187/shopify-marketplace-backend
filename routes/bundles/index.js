@@ -232,7 +232,7 @@ export default () => {
     }
   });
 
-  BundleRoutes.post(GENERATE_IMAGES, async (req, res) => {
+  BundleRoutes.post(GENERATE_IMAGES, AuthMiddleware, async (req, res) => {
     try {
       const data = await GenerateImages(req);
       return SuccessResponseHandler(req, res, {
