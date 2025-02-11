@@ -22,7 +22,6 @@ import {
   UPDATE_PRODUCT_WITH_NEW_MEDIA,
 } from "#common-functions/shopify/queries.js";
 import logger from "#common-functions/logger/index.js";
-import StoreDetails from "#schemas/storeDetails.js";
 
 const bigQueryClient = new GoogleBigQuery(process.env.GCP_PROJECT_ID);
 
@@ -68,11 +67,8 @@ export const CreateBundle = async (req) => {
     const bundleProducts = await Products.find({
       _id: { $in: productIds },
     }).lean();
-    const [storeDetails] = await StoreDetails.find({
-      store: store._id,
-    }).lean();
 
-    if (!storeDetails || !storeDetails?.logo) {
+    if (!store?.logo) {
       return {
         message:
           "Cannot find the store logo. Make sure to upload the logo before creating bundles",
@@ -614,10 +610,6 @@ export const UpdateBundle = async (req) => {
       })
       .lean();
 
-    const storeDetails = await StoreDetails.findOne({
-      store: store._id,
-    });
-
     const inventoryDelta = updatedBundle.inventory - doesBundleExists.inventory;
     if (!doesBundleExists.shopifyProductId) {
       return {
@@ -632,7 +624,7 @@ export const UpdateBundle = async (req) => {
       productId: doesBundleExists.shopifyProductId,
       inventoryDelta,
       storeUrl: internalStore.storeUrl,
-      storeLogo: storeDetails.logo,
+      storeLogo: store.logo,
     });
     let vendor;
     if (doesBundleExists.metadata?.vendorShopifyId) {
@@ -645,7 +637,7 @@ export const UpdateBundle = async (req) => {
         inventoryDelta,
         storeUrl: store.storeUrl,
         isVendorProduct: true,
-        storeLogo: storeDetails.logo,
+        storeLogo: store.logo,
       });
     }
     const variantMapping = {};

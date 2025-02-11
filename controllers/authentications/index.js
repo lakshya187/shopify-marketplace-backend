@@ -482,20 +482,20 @@ async function GetStoreAuthToken(storeData, accessToken, eventBridgeARN) {
 export const InitializeStore = async (req) => {
   const { storeUrl, clientId, clientSecret, eventBridgeArn } = req.body;
   try {
-    const { authorization } = req.headers;
-    if (!authorization) {
-      return {
-        message: "You are not authorized to perform this action",
-        status: 401,
-      };
-    }
+    // const { authorization } = req.headers;
+    // if (!authorization) {
+    //   return {
+    //     message: "You are not authorized to perform this action",
+    //     status: 401,
+    //   };
+    // }
     const { CUSTOM_APP_AUTH } = process.env;
-    if (authorization !== CUSTOM_APP_AUTH) {
-      return {
-        message: "You are not authorized to perform this action",
-        status: 401,
-      };
-    }
+    // if (authorization !== CUSTOM_APP_AUTH) {
+    //   return {
+    //     message: "You are not authorized to perform this action",
+    //     status: 401,
+    //   };
+    // }
 
     const doesStoreExists = await Stores.findOne({ storeUrl }).lean();
     if (doesStoreExists) {
