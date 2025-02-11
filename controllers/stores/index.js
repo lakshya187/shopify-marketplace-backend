@@ -1,7 +1,6 @@
-import StoreDetails from "#schemas/storeDetails.js";
 import Stores from "#schemas/stores.js";
 
-export const GetStoreDetails = async (req) => {
+export const GetStore = async (req) => {
   try {
     const { user } = req;
     const [store] = await Stores.find({
@@ -14,31 +13,8 @@ export const GetStoreDetails = async (req) => {
         message: "Store not found",
       };
     }
-    let data = null;
-    const [storeDetails] = await StoreDetails.find({ store: store._id }).lean();
-    if (!storeDetails) {
-      const newStoreDetails = new StoreDetails({
-        businessName: store.shopName,
-        displayName: store.shopName,
-        description: "",
-        addressLine1: store.address1,
-        addressLine2: store.address2,
-        contactNumber: store.phoneNumber,
-        documents: [],
-        email: store.primaryEmail,
-        gstNumber: "",
-        landmark: "",
-        pincode: store.provinceCode,
-        registrationNumber: "",
-        state: "",
-        store: store._id,
-      });
-      data = await newStoreDetails.save();
-    } else {
-      data = storeDetails;
-    }
     return {
-      data,
+      data: store,
       status: 200,
       message: "Successfully fetched the store details",
     };
@@ -50,7 +26,7 @@ export const GetStoreDetails = async (req) => {
   }
 };
 
-export const UpdateStoreDetails = async (req) => {
+export const UpdateStore = async (req) => {
   try {
     const { user } = req;
     const [store] = await Stores.find({
@@ -65,10 +41,8 @@ export const UpdateStoreDetails = async (req) => {
     }
     const {
       businessName,
-      displayName,
       description,
       contactNumber,
-      email,
       addressLine1,
       addressLine2,
       landmark,
@@ -83,34 +57,32 @@ export const UpdateStoreDetails = async (req) => {
     // Create the update object
     const updateObj = {
       businessName,
-      displayName,
       description,
-      contactNumber,
-      email,
-      addressLine1,
-      addressLine2,
+      phoneNumber: contactNumber,
+      address1: addressLine1,
+      address2: addressLine2,
       landmark,
-      pincode,
+      zip: pincode,
       state,
       gstNumber,
       registrationNumber,
-      documents,
+      // documents,
       logo,
     };
 
-    const updatedStore = await StoreDetails.findOneAndUpdate(
-      { store: store._id },
+    const updatedStore = await Stores.findOneAndUpdate(
+      { _id: store._id },
       updateObj,
       { new: true },
     );
 
     return {
       message: "Store details updated successfully",
-      status: 200,
+      status: 201,
       data: updatedStore,
     };
   } catch (e) {
-    console.error("Error updating store details:", e);
+    logger("error", "Error updating store details:", e);
     return {
       message: "Internal server error",
       status: 500,

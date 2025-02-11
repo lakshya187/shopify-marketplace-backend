@@ -2,7 +2,6 @@ import Joi from "joi";
 
 export const UpdateStoreSchema = Joi.object({
   businessName: Joi.string().trim().required().label("Business Name"),
-  displayName: Joi.string().trim().required().label("Display Name"),
   description: Joi.string().trim().allow("").label("Description"),
   contactNumber: Joi.string().optional(),
   email: Joi.string()
