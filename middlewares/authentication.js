@@ -1,5 +1,6 @@
 import logger from "#common-functions/logger/index.js";
 import ErrorResponseHandler from "#common-functions/utils/errorResponseHandler.js";
+import Stores from "#schemas/stores.js";
 import { DecryptJWT } from "#utils/auth.js";
 
 export default async function AuthMiddleware(req, res, next) {
@@ -23,6 +24,15 @@ export default async function AuthMiddleware(req, res, next) {
     }
 
     const decoded = await DecryptJWT(token);
+    const [store] = await Stores.find({
+      storeUrl: decoded.storeUrl,
+    }).lean();
+    if (!store || !store.isActive) {
+      return ErrorResponseHandler(req, res, {
+        status: 403,
+        message: "The store is no longer active.",
+      });
+    }
 
     req.user = decoded;
 
