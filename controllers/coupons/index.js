@@ -2,6 +2,7 @@ import executeShopifyQueries from "#common-functions/shopify/execute.js";
 import {
   CREATE_COUPON,
   DELETE_COUPON,
+  UPDATE_COUPON,
 } from "#common-functions/shopify/queries.js";
 import Bundles from "#schemas/bundles.js";
 import Coupons from "#schemas/coupons.js";
@@ -301,4 +302,236 @@ export const DeleteCoupon = async (req) => {
       message: e.message || "Something went wrong",
     };
   }
+};
+
+export const UpdateCoupon = async (req) => {
+  try {
+    const {
+      code,
+      title,
+      discountValue,
+      discountType,
+      appliesTo,
+      bundleIds,
+      usageLimit,
+      appliesOncePerCustomer,
+      startsAt,
+      endsAt,
+      isActive,
+      purchaseType,
+      minimumPurchaseAmount,
+    } = req.body;
+    const { user } = req;
+    const [store] = await Stores.find({
+      storeUrl: user.storeUrl,
+    }).lean();
+
+    if (!store) {
+      return {
+        status: 400,
+        message: "Store not found",
+      };
+    }
+    const [internalStore] = await Stores.find({
+      isActive: true,
+      isInternalStore: true,
+    }).lean();
+    if (!internalStore) {
+      return {
+        status: 400,
+        message: "Internal store does not exists",
+      };
+    }
+
+    const { id } = req.params;
+    const isCouponAvailable = await Coupons.findOne({ _id: id }).lean();
+    if (!isCouponAvailable) {
+      return {
+        status: 400,
+        message: "Coupon not found",
+      };
+    }
+    const updateObj = {};
+
+    const fieldsToUpdate = {
+      code,
+      title,
+      discountValue,
+      discountType,
+      appliesTo,
+      bundleIds,
+      usageLimit,
+      appliesOncePerCustomer,
+      startsAt,
+      endsAt,
+      isActive,
+      purchaseType,
+      minimumPurchaseAmount,
+    };
+
+    const shopifyBundleIds = await getShopifyBundleIds({
+      appliesTo,
+      bundleIds,
+      storeId: store._id,
+    });
+
+    Object.keys(fieldsToUpdate).forEach((key) => {
+      if (fieldsToUpdate[key] !== undefined) {
+        updateObj[key] = fieldsToUpdate[key];
+      }
+    });
+    const customerGets = getCustomerGets(updateObj);
+    const minimumPurchaseAmountObj = buildMinimumPurchaseValue(updateObj);
+
+    try {
+      await executeShopifyQueries({
+        accessToken: internalStore.accessToken,
+        storeUrl: internalStore.storeUrl,
+        query: UPDATE_COUPON,
+        variables: {
+          id: isCouponAvailable.shopifyId,
+          basicCodeDiscount: {
+            title,
+            code,
+            customerSelection: {
+              all: true,
+            },
+            customerGets: {
+              ...customerGets,
+              items: {
+                products: {
+                  productsToAdd: shopifyBundleIds,
+                },
+              },
+            },
+            usageLimit: Number(usageLimit),
+            startsAt,
+            endsAt,
+            ...minimumPurchaseAmountObj,
+          },
+        },
+      });
+    } catch (e) {
+      logger(
+        "error",
+        e.message || "An error occurred while updating the coupon",
+        e,
+      );
+      return {
+        status: 500,
+        message: e.message || "An error occurred while updating the coupon",
+      };
+    }
+
+    const updatedCoupon = await Coupons.findByIdAndUpdate(id, updateObj, {
+      new: true,
+    }).lean();
+
+    if (!updatedCoupon) {
+      return {
+        status: 400,
+        message: "Failed to update the coupon",
+      };
+    }
+
+    return {
+      status: 200,
+      message: "Coupon updated successfully",
+      data: updatedCoupon,
+    };
+  } catch (e) {
+    logger(
+      "error",
+      e.message || "An error occurred while updating the coupon",
+      e,
+    );
+    return {
+      status: 500,
+      message: e.message || "An error occurred while updating the coupon",
+    };
+  }
+};
+
+export const GetCoupon = async (req) => {
+  try {
+    const { user } = req;
+    const [store] = await Stores.find({
+      storeUrl: user.storeUrl,
+    }).lean();
+
+    if (!store) {
+      return {
+        status: 400,
+        message: "Store not found",
+      };
+    }
+
+    const { id } = req.params;
+    const isCouponAvailable = await Coupons.findOne({
+      _id: id,
+      store: store._id,
+    }).lean();
+    if (!isCouponAvailable) {
+      return {
+        status: 400,
+        message: "Coupon not found",
+      };
+    }
+
+    return {
+      status: 200,
+      message: "Coupon fetched successfully",
+      data: isCouponAvailable,
+    };
+  } catch (error) {
+    return {
+      status: 500,
+      message: error.message || "An error occurred while fetching coupon",
+    };
+  }
+};
+// module specific functions
+
+const getShopifyBundleIds = async ({ appliesTo, bundleIds, storeId }) => {
+  const bundleFilter = {
+    isCreatedOnShopify: true,
+    isDeleted: false,
+    isTemp: false,
+  };
+  if (appliesTo === "all") {
+    bundleFilter["store"] = storeId;
+  } else if (appliesTo === "products") {
+    bundleFilter["_id"] = { $in: bundleIds };
+    bundleFilter["store"] = storeId;
+  }
+  const bundles = await Bundles.find(bundleFilter).lean();
+  return bundles.map((b) => b.shopifyProductId);
+};
+
+const getCustomerGets = (couponObj) => {
+  const customerGets = {
+    value: {},
+  };
+
+  if (couponObj.discountType === "percentage") {
+    customerGets.value["percentage"] = Number(couponObj.discountValue) / 100;
+  } else if (couponObj.discountType === "fixed_amount") {
+    customerGets.value["discountAmount"] = {
+      amount: Number(couponObj.discountValue),
+    };
+  }
+
+  return customerGets;
+};
+
+const buildMinimumPurchaseValue = (couponObj) => {
+  const minimumPurchaseAmountObj = {};
+  if (couponObj?.minimumPurchaseAmount >= 0) {
+    minimumPurchaseAmountObj["minimumRequirement"] = {
+      subtotal: {
+        greaterThanOrEqualToSubtotal: Number(couponObj.minimumPurchaseAmount),
+      },
+    };
+  }
+  return minimumPurchaseAmountObj;
 };
