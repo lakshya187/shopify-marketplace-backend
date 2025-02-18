@@ -3,6 +3,13 @@ import Orders from "#schemas/orders.js";
 import executeShopifyQueries from "#common-functions/shopify/execute.js";
 import { CANCEL_ORDER } from "#common-functions/shopify/queries.js";
 
+/*
+{
+  payment : "paid" | "pending" | "refunded",
+  status : "pending" | 'fulfilled' | 'cancelled',
+}
+*/
+
 export const GetOrders = async (req) => {
   try {
     const { user } = req;
@@ -15,15 +22,15 @@ export const GetOrders = async (req) => {
         message: "Store not found",
       };
     }
-    const { page } = req.query;
+    const { page, paymentStatus, status } = req.query;
+    const filter = buildFilterQuery({ paymentStatus, status });
+
     const limit = 10;
     const skip = (Number(page) - 1) * limit;
 
     const orders = await Orders.find({
       store: store._id,
-      status: {
-        $ne: "cancelled",
-      },
+      ...filter,
     })
       .populate("user")
       .skip(skip)
@@ -186,4 +193,14 @@ export const CancelOrder = async (req) => {
 
 const formatNumber = (num) => {
   return num.toLocaleString("en-IN");
+};
+
+const buildFilterQuery = (queryObj) => {
+  const filter = {};
+  Object.entries(queryObj).forEach(([key, value]) => {
+    if (value) {
+      filter[key] = value;
+    }
+  });
+  return filter;
 };
